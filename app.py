@@ -1,279 +1,204 @@
+# app.py
 import streamlit as st
-import time
-import base64
+import os
+import glob
 from PIL import Image
+import firebase_admin
+from firebase_admin import credentials, db
 
-# 1. Cấu hình trang web Streamlit
+# ==============================================================================
+# KHU VỰC GEMINI API (TẠM THỜI GHI CHÚ ĐỂ TEST GIAO DIỆN)
+# Khi nào có API Key từ Google AI Studio, bỏ dấu # ở 2 dòng import này:
+# ==============================================================================
+# from google import genai
+# from google.genai import types
+
 st.set_page_config(
-    page_title="AI Stylist - Take My Vibe",
+    page_title="AI Stylist - Bách Khoa Cổ Phục Việt Nam",
     page_icon="👘",
-    layout="wide",
-    initial_sidebar_state="expanded"
+    layout="wide"
 )
 
-# 2. Custom CSS cho Giao diện & Hiệu ứng Hover Loading 1 giây
-st.markdown("""
-<style>
-    /* Bảng màu di sản & hiện đại */
-    :root {
-        --bg-color: #121212;
-        --card-bg: #1e1e1e;
-        --accent-gold: #d4af37;
-        --alert-red: #d32f2f;
-    }
-    
-    /* Header styling */
-    .main-title {
-        text-align: center;
-        color: #d4af37;
-        font-family: 'Georgia', serif;
-        font-size: 2.2rem;
-        font-weight: bold;
-        margin-bottom: 5px;
-    }
-    .sub-title {
-        text-align: center;
-        color: #cccccc;
-        font-size: 1rem;
-        margin-bottom: 25px;
-    }
+# ==========================================
+# 1. KHỞI TẠO FIREBASE REALTIME DATABASE
+# ==========================================
+@st.cache_resource
+def init_firebase_rtdb():
+    if not firebase_admin._apps:
+        # Lấy thông tin cấu hình từ Secrets trên Streamlit Cloud
+        firebase_dict = dict(st.secrets["firebase"])
+        firebase_dict["private_key"] = firebase_dict["private_key"].replace("\\n", "\n")
+        
+        cred = credentials.Certificate(firebase_dict)
+        firebase_admin.initialize_app(cred, {
+            'databaseURL': 'https://ai-stylist---take-my-vibe-default-rtdb.asia-southeast1.firebasedatabase.app/'
+        })
 
-    /* Hiệu ứng Hover 1s kèm Spinner Loading cho Dropdown Cổ Phục */
-    .hover-container {
-        position: relative;
-        display: inline-block;
-        width: 100%;
-        padding: 10px;
-        background-color: #262626;
-        border: 1px solid #d4af37;
-        border-radius: 8px;
-        cursor: pointer;
-        text-align: center;
-        color: #ffffff;
-        font-weight: 500;
-        margin-bottom: 15px;
-    }
+init_firebase_rtdb()
 
-    .hover-preview-box {
-        display: none;
-        position: absolute;
-        top: 100%;
-        left: 0;
-        z-index: 999;
-        width: 320px;
-        background: #1e1e1e;
-        border: 2px solid #d4af37;
-        border-radius: 10px;
-        padding: 12px;
-        box-shadow: 0px 8px 16px rgba(0,0,0,0.7);
-    }
+# Tải toàn bộ tri thức từ Firebase Realtime Database
+@st.cache_data(ttl=600)
+def load_knowledge_base():
+    try:
+        ref = db.reference('/')
+        return ref.get() or {}
+    except Exception as e:
+        st.error(f"Lỗi khi kết nối Firebase: {str(e)}")
+        return {}
 
-    /* Kích hoạt Loading Spinner trong 1 giây trước khi hiện ảnh */
-    .hover-container:hover .hover-preview-box {
-        display: block;
-        animation: fadeIn 0.3s ease-in-out 1s forwards;
-        opacity: 0;
-    }
+KNOWLEDGE_DATA = load_knowledge_base()
 
-    .hover-container:hover::after {
-        content: "⏳ Đang tải xem trước ảnh Áo Chít...";
-        position: absolute;
-        top: 105%;
-        left: 10%;
-        background: #333;
-        color: #d4af37;
-        padding: 6px 12px;
-        border-radius: 5px;
-        font-size: 0.85rem;
-        animation: fadeOut 0.1s linear 1s forwards;
-    }
+# ==============================================================================
+# 2. KHỞI TẠO GEMINI AI CLIENT (TẠM THỜI GHI CHÚ)
+# Khi nào có API Key, bỏ dấu # ở toàn bộ hàm bên dưới:
+# ==============================================================================
+# @st.cache_resource
+# def init_gemini():
+#     api_key = st.secrets.get("GEMINI_API_KEY") or os.environ.get("GEMINI_API_KEY")
+#     if not api_key:
+#         st.error("⚠️ Chưa cấu hình GEMINI_API_KEY trong Streamlit Secrets!")
+#         st.stop()
+#     return genai.Client(api_key=api_key)
+#
+# gemini_client = init_gemini()
 
-    @keyframes fadeIn {
-        to { opacity: 1; }
-    }
-    @keyframes fadeOut {
-        to { display: none; opacity: 0; }
-    }
+# ==========================================
+# 3. GIAO DIỆN CHÍNH STREAMLIT
+# ==========================================
+st.title("👘 AI STYLIST - BÁCH KHOA CỔ PHỤC VIỆT NAM")
 
-    /* Glitch Alert Pop-up Style */
-    .red-alert-box {
-        background-color: #3e1111;
-        border: 2px solid #ff4d4d;
-        border-radius: 10px;
-        padding: 15px;
-        color: #ffcccc;
-        margin-bottom: 20px;
-        animation: pulse 1.5s infinite;
-    }
-    @keyframes pulse {
-        0% { box-shadow: 0 0 0 0 rgba(255, 77, 77, 0.4); }
-        70% { box-shadow: 0 0 0 10px rgba(255, 77, 77, 0); }
-        100% { box-shadow: 0 0 0 0 rgba(255, 77, 77, 0); }
-    }
-</style>
-""", unsafe_allow_html=True)
-
-# Header
-st.markdown("<div class='main-title'>👘 AI STYLIST - TAKE MY VIBE</div>", unsafe_allow_html=True)
-st.markdown("<div class='sub-title'>Ứng dụng Phối Cổ Phục Việt Nam Chuẩn Văn Hóa dành cho Học Sinh, Sinh Viên</div>", unsafe_allow_html=True)
-
-# Tạo bố cục 2 cột chính (Cột trái: Form nhập | Cột phải: Kết quả Lookbook)
 col_left, col_right = st.columns([1, 1.2], gap="large")
 
-# ---------------------------------------------------------
-# CỘT TRÁI: FORM NHẬP THÔNG TIN
-# ---------------------------------------------------------
 with col_left:
-    st.subheader("📋 Tùy Chọn Tải Vibe Phối Đồ")
+    st.subheader("📋 Cấu Hình Yêu Cầu")
     
-    # 1. Thông số cá nhân
-    col_h, col_w = st.columns(2)
-    with col_h:
-        height = st.number_input("Chiều cao (cm)", min_value=140, max_value=200, value=165)
-    with col_w:
-        weight = st.number_input("Cân nặng (kg)", min_value=40, max_value=120, value=55)
-
-    # 2. Chọn Cổ phục (Giới hạn Áo Chít theo yêu cầu)
-    st.write("**Chọn Loại Cổ Phục:**")
+    user_name = st.text_input("1. Tên của bạn (Để lưu lịch sử):", placeholder="Ví dụ: Nguyễn Văn A")
     
-    # Khối Hover có hiệu ứng Loading 1 giây để hiển thị ảnh cổ phục đã gửi
-    st.markdown("""
-    <div class="hover-container">
-        📌 Rê chuột & giữ 1s vào đây để xem trước ảnh Áo Ngũ Thân Tay Chẽn (Áo Chít)
-        <div class="hover-preview-box">
-            <p style="color:#d4af37; margin-bottom:5px; font-size:0.9rem;">✨ Bộ sưu tập Áo Chít Truyền Thống:</p>
-            <p style="font-size:0.8rem; color:#bbb;">• Áo gấm xám ghi, lụa tím, gấm vàng, áo đỏ son...<br>• Cổ đứng 3cm, ống tay chẽn bó sát.<br>• Chuẩn 5 hột nút biểu tượng Ngũ Thường.</p>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    # Lấy danh mục áo động từ Firebase (danh_muc_ao)
+    danh_sach_ao = list(KNOWLEDGE_DATA.get("danh_muc_ao", {}).keys()) if "danh_muc_ao" in KNOWLEDGE_DATA else ["ao_chit", "ao_tac", "ao_nhat_binh"]
+    loai_ao_selected = st.selectbox("2. Chọn loại cổ phục:", options=danh_sach_ao)
     
-    co_phuc = st.selectbox(
-        "Loại áo cổ phục chọn:",
-        ["Áo Ngũ Thân Tay Chẽn (Áo Chít)"],
-        index=0
+    vibe_style = st.selectbox(
+        "3. Định hình phong cách (Vibe):",
+        ["Thư sinh quý tộc", "Hoài cổ thanh lịch", "Dạo phố hiện đại", "Dự lễ hội / Lễ cưới"]
     )
-
-    # 3. Chọn Vibe Phong cách
-    vibe = st.selectbox(
-        "Chọn Vibe Phong cách Hiện đại:",
-        [
-            "Thư sinh (Preppy Scholar)",
-            "Vintage xưa hoài cổ (Retro Nostalgia)",
-            "Chill chill mùa thu Hà Nội (Autumn City Boy)"
-        ]
-    )
-
-    # 4. Chọn Item phối kèm (Để kiểm tra Luật Cấm Kỵ Glitch Fix)
-    bottom_item = st.selectbox(
-        "Chọn Trang phục / Phụ kiện phối kèm phía dưới:",
-        [
-            "Quần âu / Kaki ống suông (Chuẩn mực)",
-            "Quần đũi / Linen ống rộng thoải mái (Vintage)",
-            "Quần Jeans ống suông (City Boy Casual)",
-            "Váy Mã diện (Hán phục - Lỗi Cấm Kỵ Red Alert!)",
-            "Thiết kế hở nách / Không khâu liền (Lỗi Cấm Kỵ Red Alert!)"
-        ]
-    )
-
-    # 5. Nút Bấm Tạo Lookbook
-    btn_generate = st.button("✦ TẠO LOOKBOOK STYLIST ✦", use_container_width=True, type="primary")
-
-# ---------------------------------------------------------
-# CỘT PHẢI: KẾT QUẢ VỚI 3 TAB (MOCK DATA TỪ DỮ LIỆU ĐÃ GỬI)
-# ---------------------------------------------------------
-with col_right:
-    st.subheader("🖼️ Màn Hình Hiển Thị Lookbook & Tư Vấn")
     
-    # Xử lý Cảnh Báo Glitch Fix
-    if "Váy Mã diện" in bottom_item:
-        st.markdown("""
-        <div class="red-alert-box">
-            <h3>🚨 CẢNH BÁO ĐỎ (RED ALERT): ERR_MA_DIEN</h3>
-            <p><b>Lỗi vi phạm:</b> Việc kết hợp Việt phục (Áo ngũ thân tay chẽn) với Váy Mã diện của Hán phục làm sai lệch hoàn toàn đặc trưng văn hóa!</p>
-            <p>👉 <i>Vui lòng đổi sang Quần âu, Quần đũi hoặc Quần ống sớ truyền thống để tuân thủ quy chuẩn!</i></p>
-        </div>
-        """, unsafe_allow_html=True)
-    elif "hở nách" in bottom_item:
-        st.markdown("""
-        <div class="red-alert-box">
-            <h3>🚨 CẢNH BÁO ĐỎ (RED ALERT): ERR_HO_NACH</h3>
-            <p><b>Lỗi vi phạm:</b> Hai bên nách áo trở xuống bắt buộc phải khâu liền cho kín, tuyệt đối không được hở hang lộ da thịt!</p>
-            <p>👉 <i>Vui lòng điều chỉnh lại phom dáng áo chẽn để bảo tồn sự kín đáo mực thước!</i></p>
-        </div>
-        """, unsafe_allow_html=True)
+    user_context = st.text_area("4. Mô tả thêm / Phụ kiện muốn kết hợp:")
 
-    # Tạo 3 Tab ở cột phải
-    tab1, tab2, tab3 = st.tabs(["📸 Ảnh Lookbook", "💡 Lời Khuyên Stylist", "📜 Triết Lý Văn Hóa"])
-
-    # TAB 1: ÁNH LOOKBOOK (Hiển thị các mẫu ảnh Áo Chít trong tập dữ liệu gửi)
-    with tab1:
-        st.caption("Lookbook thị giác Áo Ngũ Thân Tay Chẽn phối chuẩn phong cách:")
+    # ----------------------------------------------------
+    # PHẦN TỰ ĐỘNG QUÉT VÀ HIỂN THỊ ẢNH TỪ THƯ MỤC ASSETS/
+    # ----------------------------------------------------
+    st.write("---")
+    st.subheader("📸 Chọn Mẫu Ảnh Từ Thư Mục Assets")
+    
+    # Quét tất cả các file ảnh trong thư mục assets và thư mục con
+    search_jpg = os.path.join("assets", "**", "*.[jJ][pP][gG]")
+    search_jpeg = os.path.join("assets", "**", "*.[jJ][pP][eE][gG]")
+    search_png = os.path.join("assets", "**", "*.[pP][nN][gG]")
+    image_files = glob.glob(search_jpg, recursive=True) + glob.glob(search_jpeg, recursive=True) + glob.glob(search_png, recursive=True)
+    
+    selected_image = None
+    chosen_img_name = "Khong_chon_anh"
+    
+    if image_files:
+        img_options = {os.path.basename(path): path for path in image_files}
+        chosen_img_name = st.selectbox("Chọn 1 ảnh từ thư mục assets để AI phân tích:", list(img_options.keys()))
         
-        # Mô phỏng hiển thị hình ảnh mẫu dựa trên Vibe được chọn
-        if vibe == "Thư sinh (Preppy Scholar)":
-            st.info("🎨 **Bản phối Thư sinh (Preppy Scholar):** Áo chít gấm xám ghi / lụa tím kết hợp quần âu, kính gọng tròn, vòng ngọc trai.")
-            col_img1, col_img2 = st.columns(2)
-            with col_img1:
-                st.caption("Áo chít xám ghi dệt hoa văn")
-                # Hiển thị thông tin mô tả thực tế từ ảnh 4
-                st.write("• Chất liệu: Lụa/Gấm dệt chìm hoa văn\n• Phụ kiện: Chuỗi anh lạc rủ ngực, quạt xếp")
-            with col_img2:
-                st.caption("Áo chít lụa the tím nhạt")
-                # Thông tin mô tả thực tế từ ảnh 9
-                st.write("• Chất liệu: Lụa the tím xuyên thấu nhã nhặn\n• Phụ kiện: Chuỗi ngọc trai 3 vòng, khăn đóng tím")
+        chosen_img_path = img_options[chosen_img_name]
+        selected_image = Image.open(chosen_img_path)
+        
+        # Hiển thị ảnh vừa chọn
+        st.image(selected_image, caption=f"Mẫu đã chọn: {chosen_img_name}", width=280)
+    else:
+        st.warning("⚠️ Chưa thấy ảnh trong thư mục `assets/`. Hãy tải ảnh vào thư mục `assets/` trên GitHub.")
 
-        elif vibe == "Vintage xưa hoài cổ (Retro Nostalgia)":
-            st.info("🎨 **Bản phối Vintage hoài cổ:** Áo chít hồng phấn / gấm đỏ kết hợp guốc mộc, nón lá, túi mây thủ công.")
-            col_img1, col_img2 = st.columns(2)
-            with col_img1:
-                st.caption("Áo chít hồng phấn hoài cổ")
-                # Thông tin từ ảnh 5
-                st.write("• Chất liệu: Vải đũi/Linen hồng đất\n• Phụ kiện: Chuỗi hạt đỏ, nón lá, guốc mộc cao")
-            with col_img2:
-                st.caption("Áo chít lụa hồng nhạt")
-                # Thông tin từ ảnh 8
-                st.write("• Chất liệu: Lụa tơ tằm mỏng nhẹ\n• Phụ kiện: Túi cói/mây bán nguyệt, giày hài đỏ")
+    btn_submit = st.button("✦ CHẠY THỬ NGHIỆM & LƯU FIREBASE ✦", type="primary", use_container_width=True)
 
-        else: # Autumn City Boy
-            st.info("🎨 **Bản phối Chill chill Mùa Thu:** Áo chít đỏ son / gấm vàng khoác ngoài nhẹ nhàng, quần ống suông.")
-            col_img1, col_img2 = st.columns(2)
-            with col_img1:
-                st.caption("Áo chít gấm vàng thượng lưu")
-                # Thông tin từ ảnh 10
-                st.write("• Chất liệu: Gấm satin dệt hoa mây vàng\n• Phụ kiện: Quạt giấy, quần trắng ống suông")
-            with col_img2:
-                st.caption("Áo chít lụa đỏ thẫm/mận chín")
-                # Thông tin từ ảnh 6 & 12
-                st.write("• Chất liệu: Lụa tơ bóng màu mận chín\n• Phụ kiện: Chuỗi hạt anh lạc, quạt xếp")
+with col_right:
+    st.subheader("💡 Kết Quả Phân Tích (Chế Độ Test Giao Diện)")
+    
+    if btn_submit:
+        if not user_name:
+            st.warning("⚠️ Vui lòng nhập Tên của bạn trước khi bấm!")
+        else:
+            with st.spinner("🧪 Đang xử lý chế độ TEST (Chưa dùng Gemini API)..."):
+                
+                # ----------------------------------------------------------------------
+                # A. CÂU TRẢ LỜI GIẢ LẬP ĐỂ TEST GIAO DIỆN & DỮ LIỆU
+                # ----------------------------------------------------------------------
+                ai_result_text = f"""
+### 🧪 [CÂU TRẢ LỜI GIẢ LẬP - TEST MODE]
+* **Người dùng:** {user_name}
+* **Loại áo chọn:** {loai_ao_selected}
+* **Phong cách (Vibe):** {vibe_style}
+* **Ảnh đính kèm:** {chosen_img_name}
+* **Ghi chú bổ sung:** {user_context if user_context else 'Không có'}
 
-    # TAB 2: LỜI KHUYÊN STYLIST TỪ TÀI LIỆU CỔ PHỤC
-    with tab2:
-        st.markdown("### 📝 Tư Vấn Lựa Chọn Chất Liệu & Màu Sắc Mùa:")
-        st.markdown("""
-        - **Cấu trúc ống tay:** Ống tay áo chẽn bó sát và dài (nên mới gọi là *áo chít*), cửa ống tay rộng tối đa 30cm để gọn gàng khi di chuyển.
-        - **Chất liệu khuyến nghị theo mùa:**
-          - 🌸 **Mùa Xuân:** Mặc áo kép (2 lớp), lớp ngoài gấm satin xanh thiên thanh, lót lụa vàng mơ.
-          - ☀️ **Mùa Hạ:** Ưu tiên áo đơn 1 lớp bằng **lụa the** hoặc **lụa vân** màu đen/tím/hồng nhẹ để thoáng mát.
-          - 🍂 **Mùa Thu:** Mặc áo kép ngoài gấm satin mờ, lót lụa xanh ngọc.
-          - ❄️ **Mùa Đông:** Mặc áo kép bằng **vải nỉ (Dạ mông tự)** ấm áp trơn màu đen, lót lụa xanh nhạt.
-        - **Phối Phụ Kiện:** Có thể kết hợp thêm **chuỗi anh lạc** (đá quý, ngọc trai, trầm hương) rủ trước ngực để tôn lên nét thanh cao, tôn nghiêm. *Tuyệt đối không dùng chất liệu nhựa công nghiệp!*
-        """)
+---
+#### 📌 Xem trước cấu hình tư vấn:
+1. **Định hình phong cách:** Trang phục **{loai_ao_selected}** phối theo tinh thần **{vibe_style}**.
+2. **Chất liệu & Phối màu:** Khuyên dùng lụa tơ tằm / gấm mờ nhã nhặn.
+3. **Phụ kiện đi kèm:** Khăn đóng, quần đũi ống rộng, hài thêu hoặc guốc mộc.
 
-    # TAB 3: TRIẾT LÝ VĂN HÓA LỊCH SỬ
-    with tab3:
-        st.markdown("### 🏛️ Triết Lý Cấu Trúc Áo Ngũ Thân Tay Chẽn:")
-        st.markdown("""
-        1. **Ý nghĩa 5 thân áo:** Thân áo được định hình từ 5 thân vải, tượng trưng cho **"Tứ thân phụ mẫu"** (cha mẹ đẻ, cha mẹ vợ/chồng) và **"Một tà con"** nằm ẩn bên trong thể hiện sự che chở, khiêm nhường.
-        2. **Chuẩn 5 hột nút (Khuy cài bên phải):**
-           - Đại diện cho **Ngũ Thường**: *Nhân - Lễ - Nghĩa - Trí - Tín*.
-           - Nút áo thường làm từ ngọc thạch, ngọc mã não màu hổ phách hoặc đồng mạ vàng.
-        3. **Quy tắc Kín đáo:**
-           - Từ hai bên nách áo trở xuống **bắt buộc phải khâu liền cho kín**, không hở hang lộ da thịt.
-           - Cổ áo đứng may cao 3cm ôm sát cổ giữ nét uy nghi, lịch sự.
-        4. **Luật Tiếm Quyền:**
-           - Dân gian tuyệt đối không được dùng màu **vàng Hoàng đế** hoặc thêu **họa tiết Rồng 5 móng (ngũ trảo)**.
-        """)
+> 💡 *Lưu ý: Ứng dụng đang chạy Chế độ Test. Khi bạn thêm API Key từ Google AI Studio và mở ghi chú đoạn code Gemini bên dưới, Gemini AI sẽ tự động phân tích chi tiết hình ảnh và văn bản tại đây!*
+"""
 
-# Footer
-st.markdown("---")
-st.caption("© 2026 Take My Vibe Team - AI Arena Viet Nam 2026. Tất cả dữ liệu quy chuẩn tuân thủ tài liệu lịch sử Việt phục Triều Nguyễn.")
+                # ----------------------------------------------------------------------
+                # B. KHI CÓ GEMINI API KEY: BỎ DẤU # Ở ĐOẠN CODE BÊN DƯỚI VÀ XÓA ĐOẠN A
+                # ----------------------------------------------------------------------
+                # base_prompt = KNOWLEDGE_DATA.get("aivibecode", {}).get("system_base_promt", "Bạn là chuyên gia cố vấn cổ phục Việt Nam.")
+                # SYSTEM_PROMPT = f"{base_prompt}\n\nTRI THỨC VÀ LUẬT CẤM KỲ TỪ FIREBASE:\n{KNOWLEDGE_DATA}"
+                # 
+                # user_prompt = f"Tư vấn cho {user_name}:\n- Áo: {loai_ao_selected}\n- Vibe: {vibe_style}\n- Ghi chú: {user_context}"
+                # payload = [user_prompt]
+                # if selected_image:
+                #     payload.append(selected_image)
+                # 
+                # response = gemini_client.models.generate_content(
+                #     model="gemini-2.5-flash",
+                #     contents=payload,
+                #     config=types.GenerateContentConfig(system_instruction=SYSTEM_PROMPT, temperature=0.7)
+                # )
+                # ai_result_text = response.text
+
+                # Hiển thị kết quả ra màn hình
+                st.markdown(ai_result_text)
+                
+                # ----------------------------------------------------------------------
+                # C. GHI LỊCH SỬ THỬ NGHIỆM LÊN FIREBASE REALTIME DATABASE
+                # ----------------------------------------------------------------------
+                try:
+                    ref_history = db.reference('/lich_su_tu_van')
+                    ref_history.push({
+                        "ten_nguoi_dung": user_name,
+                        "loai_ao": loai_ao_selected,
+                        "vibe": vibe_style,
+                        "ghi_chu": user_context,
+                        "anh_assets_chon": chosen_img_name,
+                        "ket_qua_ai": ai_result_text,
+                        "thoi_gian": firebase_admin.db.ServerValue.TIMESTAMP
+                    })
+                    st.success("💾 Đã lưu dữ liệu Test thành công vào Firebase Realtime Database!")
+
+                except Exception as e:
+                    st.error(f"Lỗi khi lưu Firebase: {str(e)}")
+
+# ==========================================
+# 4. HIỂN THỊ LỊCH SỬ TƯ VẤN TỪ FIREBASE
+# ==========================================
+st.write("---")
+st.subheader("📜 Lịch Sử Tư Vấn Đã Lưu Trên Firebase")
+
+if st.button("🔄 Tải Lại Lịch Sử Tư Vấn"):
+    try:
+        history_data = db.reference('/lich_su_tu_van').order_to_back().limit_to_last(5).get()
+        if history_data:
+            for key, item in list(history_data.items())[::-1]:
+                with st.expander(f"👤 {item.get('ten_nguoi_dung')} - {item.get('loai_ao')} ({item.get('vibe')})"):
+                    st.write(f"• **Ảnh đã chọn:** {item.get('anh_assets_chon')}")
+                    st.write(f"• **Ghi chú:** {item.get('ghi_chu')}")
+                    st.markdown(f"• **Nội dung:**\n{item.get('ket_qua_ai')}")
+        else:
+            st.info("Chưa có lịch sử tư vấn nào trong Database.")
+    except Exception as e:
+        st.error(f"Lỗi khi tải lịch sử từ Firebase: {str(e)}")
