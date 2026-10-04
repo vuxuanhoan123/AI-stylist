@@ -85,7 +85,7 @@ with col_left:
     else:
         danh_sach_ao = ["ao_chit", "ao_tac", "ao_nhat_binh"]
 
-    loai_ao_selected = st.selectbox("2. Chọn loại cổ phục:", options=danh_sach_ao)    loai_ao_selected = st.selectbox("2. Chọn loại cổ phục:", options=danh_sach_ao)
+    loai_ao_selected = st.selectbox("2. Chọn loại cổ phục:", options=danh_sach_ao)   
     
     vibe_style = st.selectbox(
         "3. Định hình phong cách (Vibe):",
