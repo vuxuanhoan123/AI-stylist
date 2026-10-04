@@ -75,8 +75,17 @@ with col_left:
     user_name = st.text_input("1. Tên của bạn (Để lưu lịch sử):", placeholder="Ví dụ: Nguyễn Văn A")
     
     # Lấy danh mục áo động từ Firebase (danh_muc_ao)
-    danh_sach_ao = list(KNOWLEDGE_DATA.get("danh_muc_ao", {}).keys()) if "danh_muc_ao" in KNOWLEDGE_DATA else ["ao_chit", "ao_tac", "ao_nhat_binh"]
-    loai_ao_selected = st.selectbox("2. Chọn loại cổ phục:", options=danh_sach_ao)
+# Lấy danh mục áo an toàn (xử lý được cả dạng Dict lẫn List trên Firebase)
+    danh_muc_node = KNOWLEDGE_DATA.get("danh_muc_ao") if isinstance(KNOWLEDGE_DATA, dict) else None
+
+    if isinstance(danh_muc_node, dict):
+        danh_sach_ao = list(danh_muc_node.keys())
+    elif isinstance(danh_muc_node, list):
+        danh_sach_ao = [str(x) for x in danh_muc_node if x]
+    else:
+        danh_sach_ao = ["ao_chit", "ao_tac", "ao_nhat_binh"]
+
+    loai_ao_selected = st.selectbox("2. Chọn loại cổ phục:", options=danh_sach_ao)    loai_ao_selected = st.selectbox("2. Chọn loại cổ phục:", options=danh_sach_ao)
     
     vibe_style = st.selectbox(
         "3. Định hình phong cách (Vibe):",
