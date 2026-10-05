@@ -15,39 +15,35 @@ from firebase_admin import credentials, db
 st.set_page_config(page_title="AI Stylist - Bách Khoa Cổ Phục", page_icon="👘", layout="wide")
 
 # ==============================================================================
-# CSS GIÚP GIỎ HÀNG VÀ CỘT BÊN TRÁI TRƯỢT THEO KHANH CỦON (STICKY LAYOUT)
+# CSS STICKY MƯỢT MÀ (TỰ ĐỘNG BÁM THEO KHI CUỘN)
 # ==============================================================================
 st.markdown("""
     <style>
-    /* 1. Cố định Thanh Tiêu đề & Giỏ hàng ở trên cùng khi cuộn */
-    div[data-testid="stVerticalBlock"] > div[data-testid="stHorizontalBlock"]:first-child {
+    /* Cuộn trang mượt mà */
+    html {
+        scroll-behavior: smooth;
+    }
+
+    /* 1. Thanh Giỏ hàng bám đỉnh mượt (có làm mờ nền phía sau) */
+    div[data-testid="stVerticalBlock"] > div[data-testid="stHorizontalBlock"]:first-of-type {
         position: sticky;
         top: 2.8rem;
         z-index: 999;
-        background-color: var(--background-color, #0e1117);
-        padding-top: 0.8rem;
-        padding-bottom: 0.8rem;
-        border-bottom: 1px solid rgba(250, 250, 250, 0.1);
+        background-color: rgba(14, 17, 23, 0.85); /* Nền hơi trong suốt */
+        backdrop-filter: blur(8px); /* Làm mờ ảnh khi cuộn lướt qua */
+        padding-top: 10px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        transition: background-color 0.3s ease;
     }
 
-    /* 2. Cố định Cột Thông Tin bên trái chạy theo khi cuộn ảnh bên phải */
+    /* 2. Cột trái trượt theo tự nhiên, không bị đóng khung cứng */
     div[data-testid="stHorizontalBlock"]:nth-of-type(2) > div[data-testid="column"]:nth-of-type(1) {
         position: sticky;
-        top: 8rem;
-        align-self: flex-start;
+        top: 9rem; /* Khoảng cách an toàn dưới giỏ hàng */
+        align-self: flex-start; /* Quan trọng: Để cột có thể trượt mượt */
         z-index: 98;
-        max-height: calc(100vh - 9rem);
-        overflow-y: auto;
-        padding-right: 12px;
-    }
-
-    /* Tùy chỉnh thanh cuộn nhỏ gọn cho cột bên trái */
-    div[data-testid="stHorizontalBlock"]:nth-of-type(2) > div[data-testid="column"]:nth-of-type(1)::-webkit-scrollbar {
-        width: 4px;
-    }
-    div[data-testid="stHorizontalBlock"]:nth-of-type(2) > div[data-testid="column"]:nth-of-type(1)::-webkit-scrollbar-thumb {
-        background: #555;
-        border-radius: 10px;
+        padding-bottom: 2rem;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -59,7 +55,6 @@ if 'cart' not in st.session_state:
     st.session_state.cart = []
 
 def toggle_item(img_path):
-    """Hàm thêm/bớt ảnh vào giỏ hàng khi người dùng tick chọn"""
     if img_path in st.session_state.cart:
         st.session_state.cart.remove(img_path)
     else:
@@ -89,7 +84,7 @@ def load_knowledge_base():
 KNOWLEDGE_DATA = load_knowledge_base()
 
 # ==========================================
-# MAPPING THƯ MỤC ASSETS (Dựa trên ảnh của bạn)
+# MAPPING THƯ MỤC ASSETS
 # ==========================================
 FOLDER_MAPPING = {
     "Áo Ngũ Thân Tay Chẽn": "Ao ngu than tay chen (ao chit)",
@@ -103,8 +98,6 @@ FOLDER_MAPPING = {
 @st.dialog("🔮 KẾT QUẢ PHÂN TÍCH CHUYÊN GIA", width="large")
 def show_ai_result(name, cat, item, vibe, notes, selected_images):
     with st.spinner("🤖 Đang phân tích dữ liệu..."):
-        
-        # --- CÂU TRẢ LỜI GIẢ LẬP ĐỂ TEST ---
         st.markdown(f"""
         ### Xin chào **{name}**!
         Dưới đây là tư vấn phong cách cho lựa chọn của bạn:
@@ -124,7 +117,6 @@ def show_ai_result(name, cat, item, vibe, notes, selected_images):
 
         st.info("💡 *Đây là Popup kết quả! Phần nền phía sau đã được làm mờ. Khi kết nối API, kết quả trả về của Gemini sẽ hiển thị chi tiết tại đây.*")
         
-        # Ghi Firebase
         try:
             ref_history = db.reference('/lich_su_tu_van')
             ref_history.push({
@@ -141,14 +133,13 @@ def show_ai_result(name, cat, item, vibe, notes, selected_images):
             st.error("Lỗi lưu DB.")
 
 # ==========================================
-# 2. GIAO DIỆN CHÍNH (TOP BAR & GIỎ HÀNG STICKY)
+# 2. GIAO DIỆN CHÍNH (TOP BAR & GIỎ HÀNG)
 # ==========================================
 col_title, col_cart = st.columns([4, 1])
 with col_title:
     st.title("👘 AI STYLIST - BÁCH KHOA CỔ PHỤC")
 with col_cart:
     st.write("") 
-    # Giỏ hàng dạng xổ xuống (Popover)
     with st.popover(f"🛒 Giỏ hàng ảnh ({len(st.session_state.cart)})", use_container_width=True):
         st.markdown("**Các mẫu đã chọn:**")
         if not st.session_state.cart:
@@ -164,7 +155,7 @@ with col_cart:
 st.divider()
 
 # ==========================================
-# 3. KHU VỰC CHIA CỘT (CỘT TRÁI STICKY & GALLERY)
+# 3. KHU VỰC CHIA CỘT (NHẬP LIỆU & GALLERY)
 # ==========================================
 col_left, col_right = st.columns([1.2, 2], gap="large")
 
@@ -173,7 +164,6 @@ with col_left:
     
     user_name = st.text_input("Tên của bạn:", placeholder="Ví dụ: Nguyễn Văn A")
     
-    # Dropdown Cấp 1
     danh_muc_chinh = st.selectbox(
         "Danh mục thời trang:",
         ["Trang phục chính", "Đồ đội đầu", "Trang sức"]
@@ -181,7 +171,6 @@ with col_left:
     
     loai_chi_tiet = "Chưa chọn"
     
-    # Nếu chọn Trang phục chính -> Hiện dropdown Cấp 2
     if danh_muc_chinh == "Trang phục chính":
         danh_muc_node = KNOWLEDGE_DATA.get("danh_muc_ao") if isinstance(KNOWLEDGE_DATA, dict) else None
         danh_sach_ao = []
@@ -233,7 +222,6 @@ with col_right:
                 if image_files:
                     st.write(f"Tìm thấy **{len(image_files)}** mẫu cho **{loai_chi_tiet}**. Có thể tick chọn nhiều mẫu!")
                     
-                    # Grid 3 cột
                     cols = st.columns(3)
                     for i, img_path in enumerate(image_files):
                         with cols[i % 3]:
@@ -247,7 +235,7 @@ with col_right:
                                 args=(img_path,)
                             )
                 else:
-                    st.warning(f"⚠️️ Thư mục `{target_folder}` trống hoặc chưa có ảnh JPG/PNG.")
+                    st.warning(f"⚠ Thư mục `{target_folder}` trống hoặc chưa có ảnh JPG/PNG.")
         else:
             st.info(f"Chưa có thư mục hình ảnh được cấu hình cho '{loai_chi_tiet}'.")
     else:
