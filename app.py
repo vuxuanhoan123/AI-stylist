@@ -65,27 +65,40 @@ KNOWLEDGE_DATA = load_knowledge_base()
 # ==========================================
 # 3. GIAO DIỆN CHÍNH STREAMLIT
 # ==========================================
-st.title("👘 AI STYLIST - BÁCH KHOA CỔ PHỤC VIỆT NAM")
+st.title("👘 AI STYLIST")
 
 col_left, col_right = st.columns([1, 1.2], gap="large")
 
 with col_left:
     st.subheader("📋 Cấu Hình Yêu Cầu")
     
-    user_name = st.text_input("1. Tên của bạn (Để lưu lịch sử):", placeholder="Ví dụ: Nguyễn Văn A")
+    user_name = st.text_input("1. Tên của bạn :", placeholder="Ví dụ: Nguyễn Văn A")
     
-    # Lấy danh mục áo động từ Firebase (danh_muc_ao)
-# Lấy danh mục áo an toàn (xử lý được cả dạng Dict lẫn List trên Firebase)
+   # Lấy danh mục áo từ Firebase
     danh_muc_node = KNOWLEDGE_DATA.get("danh_muc_ao") if isinstance(KNOWLEDGE_DATA, dict) else None
 
+    danh_sach_ao = []
+    
+    # Xử lý bóc tách lấy đúng "ten_goi" để hiển thị cho đẹp
     if isinstance(danh_muc_node, dict):
-        danh_sach_ao = list(danh_muc_node.keys())
+        for key, val in danh_muc_node.items():
+            if isinstance(val, dict) and "ten_goi" in val:
+                danh_sach_ao.append(val["ten_goi"])
+            else:
+                danh_sach_ao.append(str(key))
+                
     elif isinstance(danh_muc_node, list):
-        danh_sach_ao = [str(x) for x in danh_muc_node if x]
-    else:
-        danh_sach_ao = ["ao_chit", "ao_tac", "ao_nhat_binh"]
+        for item in danh_muc_node:
+            if isinstance(item, dict) and "ten_goi" in item:
+                danh_sach_ao.append(item["ten_goi"])
+            elif item:
+                danh_sach_ao.append("Loại áo chưa rõ tên")
 
-    loai_ao_selected = st.selectbox("2. Chọn loại cổ phục:", options=danh_sach_ao)   
+    # Nếu database trống, hiển thị danh sách mặc định
+    if not danh_sach_ao:
+        danh_sach_ao = ["Áo Ngũ Thân Tay Chẽn", "Áo Tấc", "Áo Nhật Bình"]
+
+    loai_ao_selected = st.selectbox("2. Chọn loại cổ phục:", options=danh_sach_ao)
     
     vibe_style = st.selectbox(
         "3. Định hình phong cách (Vibe):",
