@@ -14,6 +14,44 @@ from firebase_admin import credentials, db
 
 st.set_page_config(page_title="AI Stylist - Bách Khoa Cổ Phục", page_icon="👘", layout="wide")
 
+# ==============================================================================
+# CSS GIÚP GIỎ HÀNG VÀ CỘT BÊN TRÁI TRƯỢT THEO KHANH CỦON (STICKY LAYOUT)
+# ==============================================================================
+st.markdown("""
+    <style>
+    /* 1. Cố định Thanh Tiêu đề & Giỏ hàng ở trên cùng khi cuộn */
+    div[data-testid="stVerticalBlock"] > div[data-testid="stHorizontalBlock"]:first-child {
+        position: sticky;
+        top: 2.8rem;
+        z-index: 999;
+        background-color: var(--background-color, #0e1117);
+        padding-top: 0.8rem;
+        padding-bottom: 0.8rem;
+        border-bottom: 1px solid rgba(250, 250, 250, 0.1);
+    }
+
+    /* 2. Cố định Cột Thông Tin bên trái chạy theo khi cuộn ảnh bên phải */
+    div[data-testid="stHorizontalBlock"]:nth-of-type(2) > div[data-testid="column"]:nth-of-type(1) {
+        position: sticky;
+        top: 8rem;
+        align-self: flex-start;
+        z-index: 98;
+        max-height: calc(100vh - 9rem);
+        overflow-y: auto;
+        padding-right: 12px;
+    }
+
+    /* Tùy chỉnh thanh cuộn nhỏ gọn cho cột bên trái */
+    div[data-testid="stHorizontalBlock"]:nth-of-type(2) > div[data-testid="column"]:nth-of-type(1)::-webkit-scrollbar {
+        width: 4px;
+    }
+    div[data-testid="stHorizontalBlock"]:nth-of-type(2) > div[data-testid="column"]:nth-of-type(1)::-webkit-scrollbar-thumb {
+        background: #555;
+        border-radius: 10px;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
 # ==========================================
 # KHỞI TẠO BIẾN SESSION (GIỎ HÀNG)
 # ==========================================
@@ -53,12 +91,10 @@ KNOWLEDGE_DATA = load_knowledge_base()
 # ==========================================
 # MAPPING THƯ MỤC ASSETS (Dựa trên ảnh của bạn)
 # ==========================================
-# Ánh xạ tên trên Database sang đúng tên Thư mục trong máy
 FOLDER_MAPPING = {
     "Áo Ngũ Thân Tay Chẽn": "Ao ngu than tay chen (ao chit)",
     "Áo Tấc": "ao tac ( ao rong )",
     "Áo Nhật Bình": "ao nhat binh",
-    # Áo hoàng cung sẽ bị loại trừ ở code xử lý bên dưới
 }
 
 # ==========================================
@@ -82,7 +118,7 @@ def show_ai_result(name, cat, item, vibe, notes, selected_images):
         
         if selected_images:
             st.write("**Các mẫu đã chọn:**")
-            cols = st.columns(min(len(selected_images), 5)) # Hiển thị tối đa 5 cột nhỏ
+            cols = st.columns(min(len(selected_images), 5))
             for idx, img_p in enumerate(selected_images):
                 cols[idx % 5].image(Image.open(img_p), use_container_width=True)
 
@@ -105,13 +141,13 @@ def show_ai_result(name, cat, item, vibe, notes, selected_images):
             st.error("Lỗi lưu DB.")
 
 # ==========================================
-# 2. GIAO DIỆN CHÍNH (TOP BAR & GIỎ HÀNG)
+# 2. GIAO DIỆN CHÍNH (TOP BAR & GIỎ HÀNG STICKY)
 # ==========================================
 col_title, col_cart = st.columns([4, 1])
 with col_title:
     st.title("👘 AI STYLIST - BÁCH KHOA CỔ PHỤC")
 with col_cart:
-    st.write("") # Dịch xuống một chút
+    st.write("") 
     # Giỏ hàng dạng xổ xuống (Popover)
     with st.popover(f"🛒 Giỏ hàng ảnh ({len(st.session_state.cart)})", use_container_width=True):
         st.markdown("**Các mẫu đã chọn:**")
@@ -119,7 +155,6 @@ with col_cart:
             st.write("Chưa có ảnh nào.")
         else:
             for c_img in st.session_state.cart:
-                # Lấy tên file để hiển thị
                 c_name = os.path.basename(c_img)
                 st.image(Image.open(c_img), caption=c_name, width=100)
             if st.button("Xóa toàn bộ", key="clear_cart"):
@@ -129,7 +164,7 @@ with col_cart:
 st.divider()
 
 # ==========================================
-# 3. KHU VỰC CHIA CỘT (NHẬP LIỆU & GALLERY)
+# 3. KHU VỰC CHIA CỘT (CỘT TRÁI STICKY & GALLERY)
 # ==========================================
 col_left, col_right = st.columns([1.2, 2], gap="large")
 
@@ -148,7 +183,6 @@ with col_left:
     
     # Nếu chọn Trang phục chính -> Hiện dropdown Cấp 2
     if danh_muc_chinh == "Trang phục chính":
-        # Lấy list tên áo từ Firebase
         danh_muc_node = KNOWLEDGE_DATA.get("danh_muc_ao") if isinstance(KNOWLEDGE_DATA, dict) else None
         danh_sach_ao = []
         if isinstance(danh_muc_node, dict):
@@ -178,24 +212,20 @@ with col_left:
         if not user_name:
             st.warning("⚠️ Vui lòng nhập Tên của bạn trước!")
         else:
-            # Gọi hàm hiển thị Popup Modal
             show_ai_result(user_name, danh_muc_chinh, loai_chi_tiet, vibe_style, user_context, st.session_state.cart)
 
 with col_right:
     st.subheader("📸 2. Bộ Sưu Tập (Chọn để đưa vào Giỏ)")
     
     if danh_muc_chinh == "Trang phục chính":
-        # Ánh xạ tên áo ra tên Thư mục
         target_folder = FOLDER_MAPPING.get(loai_chi_tiet)
         
         if target_folder:
-            # Đảm bảo KHÔNG quét vào thư mục Ao hoang cung
             if "hoang cung" in target_folder.lower():
                 st.warning("Bộ sưu tập Hoàng Cung không khả dụng ở mục này.")
             else:
                 folder_path = os.path.join("assets", target_folder)
                 
-                # Quét ảnh trong thư mục tương ứng
                 search_jpg = os.path.join(folder_path, "**", "*.[jJ][pP][gG]")
                 search_png = os.path.join(folder_path, "**", "*.[pP][nN][gG]")
                 image_files = glob.glob(search_jpg, recursive=True) + glob.glob(search_png, recursive=True)
@@ -203,12 +233,11 @@ with col_right:
                 if image_files:
                     st.write(f"Tìm thấy **{len(image_files)}** mẫu cho **{loai_chi_tiet}**. Có thể tick chọn nhiều mẫu!")
                     
-                    # Tạo Grid hiển thị ảnh (3 cột)
+                    # Grid 3 cột
                     cols = st.columns(3)
                     for i, img_path in enumerate(image_files):
                         with cols[i % 3]:
                             st.image(Image.open(img_path), use_container_width=True)
-                            # Checkbox gắn với hàm toggle
                             is_checked = img_path in st.session_state.cart
                             st.checkbox(
                                 "Chọn mẫu này", 
@@ -218,8 +247,8 @@ with col_right:
                                 args=(img_path,)
                             )
                 else:
-                    st.warning(f"⚠️ Thư mục `{target_folder}` trống hoặc chưa có ảnh JPG/PNG.")
+                    st.warning(f"⚠️️ Thư mục `{target_folder}` trống hoặc chưa có ảnh JPG/PNG.")
         else:
-            st.info(f"Chưa có thư mục hình ảnh được cấu hình cho '{loai_chi_tiet}'. (Vui lòng kiểm tra lại tên mapping)")
+            st.info(f"Chưa có thư mục hình ảnh được cấu hình cho '{loai_chi_tiet}'.")
     else:
         st.write("Hình ảnh minh họa cho Đồ đội đầu và Trang sức đang được cập nhật...")
