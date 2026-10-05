@@ -15,35 +15,36 @@ from firebase_admin import credentials, db
 st.set_page_config(page_title="AI Stylist - Bách Khoa Cổ Phục", page_icon="👘", layout="wide")
 
 # ==============================================================================
-# CSS STICKY MƯỢT MÀ (TỰ ĐỘNG BÁM THEO KHI CUỘN)
+# CSS STICKY CHUẨN ĐÃ BỎ BẪY OVERFLOW CỦA STREAMLIT
 # ==============================================================================
 st.markdown("""
     <style>
-    /* Cuộn trang mượt mà */
-    html {
-        scroll-behavior: smooth;
+    /* 1. MỞ KHÓA KHUNG CHÚA ĐỂ THUỘC TÍNH STICKY HOẠT ĐỘNG */
+    [data-testid="stMainBlockContainer"], 
+    [data-testid="stAppViewContainer"],
+    section.main,
+    .main .block-container {
+        overflow: visible !important;
     }
 
-    /* 1. Thanh Giỏ hàng bám đỉnh mượt (có làm mờ nền phía sau) */
-    div[data-testid="stVerticalBlock"] > div[data-testid="stHorizontalBlock"]:first-of-type {
-        position: sticky;
-        top: 2.8rem;
-        z-index: 999;
-        background-color: rgba(14, 17, 23, 0.85); /* Nền hơi trong suốt */
-        backdrop-filter: blur(8px); /* Làm mờ ảnh khi cuộn lướt qua */
-        padding-top: 10px;
-        padding-bottom: 10px;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        transition: background-color 0.3s ease;
+    /* 2. CỐ ĐỊNH THANH GIỎ HÀNG VÀ TIÊU ĐỀ TRÊN CÙNG */
+    div[data-testid="stHorizontalBlock"]:first-of-type {
+        position: sticky !important;
+        top: 2.8rem !important;
+        z-index: 999 !important;
+        background-color: rgba(14, 17, 23, 0.95) !important;
+        backdrop-filter: blur(8px) !important;
+        padding-top: 10px !important;
+        padding-bottom: 10px !important;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
     }
 
-    /* 2. Cột trái trượt theo tự nhiên, không bị đóng khung cứng */
-    div[data-testid="stHorizontalBlock"]:nth-of-type(2) > div[data-testid="column"]:nth-of-type(1) {
-        position: sticky;
-        top: 9rem; /* Khoảng cách an toàn dưới giỏ hàng */
-        align-self: flex-start; /* Quan trọng: Để cột có thể trượt mượt */
-        z-index: 98;
-        padding-bottom: 2rem;
+    /* 3. CỘT TRÁI TRƯỢT MƯỢT THEO KHI CUỘN CỘT PHẢI */
+    div[data-testid="stHorizontalBlock"]:nth-of-type(2) > div[data-testid="column"]:first-child {
+        position: sticky !important;
+        top: 9rem !important;
+        align-self: flex-start !important;
+        z-index: 98 !important;
     }
     </style>
 """, unsafe_allow_html=True)
