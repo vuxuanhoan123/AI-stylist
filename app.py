@@ -108,10 +108,38 @@ if st.session_state.step == 1:
             placeholder="Ví dụ: Nguyễn Văn A"
         )
 
-        # Giữ phần mô tả người mặc của Code 2
+        # Chiều cao + cân nặng ở frontend.
+        # BMI được tự động tính bên trong chương trình và gửi cho Gemini.
+        c_cao, c_nang = st.columns(2)
+
+        with c_cao:
+            h_cm = st.number_input(
+                "Chiều cao (cm):",
+                min_value=100.0,
+                max_value=220.0,
+                value=165.0,
+                step=0.5
+            )
+
+        with c_nang:
+            w_kg = st.number_input(
+                "Cân nặng (kg):",
+                min_value=30.0,
+                max_value=150.0,
+                value=58.0,
+                step=0.5
+            )
+
+        # Công thức BMI = cân nặng / (chiều cao tính bằng mét)^2
+        bmi = round(w_kg / ((h_cm / 100) ** 2), 2)
+
+        st.caption(f"💡 BMI được tính tự động: **{bmi}**")
+
+        # Vẫn giữ phần mô tả người mặc của Code 2,
+        # nhưng BMI không cần người dùng nhập nữa.
         mo_ta_nguoi = st.text_input(
-            "Mô tả người mặc (BMI, giới tính, gương mặt):",
-            value="Nam thanh niên Việt Nam, vóc dáng cân đối, đeo kính gọng tròn cổ điển"
+            "Mô tả người mặc (giới tính, gương mặt):",
+            value="Nam thanh niên Việt Nam, đeo kính gọng tròn cổ điển"
         )
 
         ghi_chu = st.text_area(
@@ -192,6 +220,9 @@ if st.session_state.step == 1:
                 input_giai_doan_1 = f"""
 [GIAI_DOAN_1_KHOI_TAO]
 - Tên người dùng: {ten_nguoi_dung}
+- Chiều cao: {h_cm} cm
+- Cân nặng: {w_kg} kg
+- BMI: {bmi}
 - Trang phục chính: {trang_phuc_chinh}
 - Đồ đội đầu: {do_doi_dau}
 - Trang sức / Phụ kiện: {trang_suc}
