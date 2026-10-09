@@ -43,79 +43,48 @@ GEMINI_API_KEY = get_api_key()
 # ==============================================================================
 
 def generate_image(prompt_text, api_key=None):
-    """Sinh ảnh Imagen 3 qua REST API, tự động kiểm tra tên model khả dụng."""
+    """Sinh ảnh Imagen 3 qua REST API với cơ chế bắt lỗi chi tiết."""
     key = api_key or get_api_key()
     if not key:
         raise RuntimeError("Chưa cấu hình GEMINI_API_KEY.")
 
     headers = {"Content-Type": "application/json"}
-    
-    # Danh sách các tên mô hình Imagen 3 hỗ trợ trên Google AI Studio
-    imagen_models = [
-        "imagen-3.0-generate-002",
-        "imagen-3.0-fast-generate-001",
-        "imagen-3.0-generate-001",
-    ]
+    model_name = "imagen-3.0-generate-002"
 
-    last_error = ""
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:predict?key={key}"
+    payload = {
+        "instances": [{"prompt": prompt_text}],
+        "parameters": {
+            "sampleCount": 1,
+            "aspectRatio": "3:4",
+            "outputOptions": {"mimeType": "image/png"},
+        },
+    }
 
-    for model_name in imagen_models:
-        # Thử Endpoint 1: :predict
-        url_predict = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:predict?key={key}"
-        payload_predict = {
-            "instances": [{"prompt": prompt_text}],
-            "parameters": {
-                "sampleCount": 1,
-                "aspectRatio": "3:4",
-                "outputOptions": {"mimeType": "image/png"},
-            },
-        }
-        try:
-            res = requests.post(url_predict, json=payload_predict, headers=headers)
-            if res.status_code == 200:
-                res_data = res.json()
-                if "predictions" in res_data and len(res_data["predictions"]) > 0:
-                    pred = res_data["predictions"][0]
-                    img_b64 = pred.get("bytesBase64Encoded") or (
-                        pred.get("image", {}).get("imageBytes")
-                        if isinstance(pred.get("image"), dict)
-                        else None
-                    )
-                    if img_b64:
-                        return base64.b64decode(img_b64)
-            else:
-                last_error = res.text
-        except Exception as e:
-            last_error = str(e)
+    try:
+        response = requests.post(url, json=payload, headers=headers, timeout=60)
+        
+        if response.status_code == 200:
+            res_data = response.json()
+            if "predictions" in res_data and len(res_data["predictions"]) > 0:
+                pred = res_data["predictions"][0]
+                img_b64 = pred.get("bytesBase64Encoded") or (
+                    pred.get("image", {}).get("imageBytes")
+                    if isinstance(pred.get("image"), dict)
+                    else None
+                )
+                if img_b64:
+                    return base64.b64decode(img_b64)
+            
+            # Trường hợp 200 OK nhưng không có dữ liệu ảnh (vd: bị Safety Filter chặn prompt)
+            err_detail = f"API trả về 200 OK nhưng không có ảnh. Phản hồi: {response.text}"
+        else:
+            err_detail = f"Mã lỗi HTTP {response.status_code}: {response.text}"
 
-        # Thử Endpoint 2: :generateImages
-        url_gen = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateImages?key={key}"
-        payload_gen = {
-            "prompt": prompt_text,
-            "config": {
-                "numberOfImages": 1,
-                "aspectRatio": "3:4",
-                "outputMimeType": "image/png",
-            },
-        }
-        try:
-            res_alt = requests.post(url_gen, json=payload_gen, headers=headers)
-            if res_alt.status_code == 200:
-                res_data_alt = res_alt.json()
-                if (
-                    "generatedImages" in res_data_alt
-                    and len(res_data_alt["generatedImages"]) > 0
-                ):
-                    img_b64 = res_data_alt["generatedImages"][0].get("image", {}).get("imageBytes")
-                    if img_b64:
-                        return base64.b64decode(img_b64)
-            else:
-                last_error = res_alt.text
-        except Exception as e:
-            last_error = str(e)
+    except Exception as e:
+        err_detail = f"Lỗi kết nối mạng: {str(e)}"
 
-    raise RuntimeError(f"Lỗi tạo ảnh Imagen từ API: {last_error}")
-
+    raise RuntimeError(err_detail)
 # ==============================================================================
 # DỮ LIỆU UI
 # ==============================================================================
