@@ -38,7 +38,7 @@ GEMINI_API_KEY = get_api_key()
 
 
 # ==============================================================================
-# TẠO ẢNH BẰNG GEMINI IMAGE MODEL
+# TẠO ẢNH BẰNG GEMINI IMAGE MODEL (IMAGEN 3)
 # ==============================================================================
 
 def generate_image(prompt_text, api_key=None):
@@ -59,6 +59,7 @@ def generate_image(prompt_text, api_key=None):
                 output_mime_type="image/png",
             ),
         )
+        # Lấy byte ảnh trực tiếp
         return result.generated_images[0].image.image_bytes
     except Exception as e:
         raise RuntimeError(f"Lỗi tạo ảnh Imagen: {e}")
@@ -130,19 +131,19 @@ def reset_all():
 
 def parse_two_prompts(prompt_string):
     """
-    Tách:
-    OPTION_A: ... ||| OPTION_B: ...
+    Tách linh hoạt: OPTION_A: ... ||| OPTION_B: ...
+    Chống bị treo app nếu AI thiếu kí tự |||.
     """
     if not prompt_string:
         return "", ""
 
-    if "|||" not in prompt_string:
-        return prompt_string.strip(), ""
-
-    parts = prompt_string.split("|||", 1)
-
-    prompt_a = parts[0].strip()
-    prompt_b = parts[1].strip()
+    if "|||" in prompt_string:
+        parts = prompt_string.split("|||", 1)
+        prompt_a = parts[0].strip()
+        prompt_b = parts[1].strip()
+    else:
+        prompt_a = prompt_string.strip()
+        prompt_b = prompt_string.strip() + ", detailed historical view option B"
 
     if prompt_a.startswith("OPTION_A:"):
         prompt_a = prompt_a[len("OPTION_A:"):].strip()
@@ -159,12 +160,12 @@ def show_error_from_ai(result):
     warning = result.get("canh_bao")
 
     if error_code:
-        st.error(f"⛔ {error_code}")
+        st.error(f"⛔ Lỗi quy chuẩn: {error_code}")
 
     if warning:
         st.error(warning)
     else:
-        st.error("⛔ AI đã chặn luồng xử lý do vi phạm quy chuẩn.")
+        st.error("⛔ AI đã chặn luồng xử lý do vi phạm quy chuẩn văn hóa.")
 
 
 # ==============================================================================
@@ -183,7 +184,7 @@ st.divider()
 
 
 # ==============================================================================
-# CHẶNG 1
+# CHẶNG 1: NHẬP THÔNG TIN & KHỞI TẠO
 # ==============================================================================
 
 if st.session_state.step == 1:
@@ -364,27 +365,23 @@ theo system instruction.
                 st.error("Gemini không trả về Prompt Option A.")
                 st.stop()
 
-            if not prompt_b:
-                st.error("Gemini không trả về Prompt Option B.")
-                st.stop()
-
             st.session_state.prompt_a = prompt_a
             st.session_state.prompt_b = prompt_b
             st.session_state.portrait_bytes = portrait_bytes
             st.session_state.portrait_mime = portrait_mime
 
             try:
-                with st.spinner("🎨 Đang tạo ảnh Option A..."):
+                with st.spinner("🎨 Đang sinh ảnh Option A bằng Imagen 3..."):
                     st.session_state.img_a = generate_image(prompt_a, api_key=GEMINI_API_KEY)
 
-                with st.spinner("🎨 Đang tạo ảnh Option B..."):
+                with st.spinner("🎨 Đang sinh ảnh Option B bằng Imagen 3..."):
                     st.session_state.img_b = generate_image(prompt_b, api_key=GEMINI_API_KEY)
 
                 st.session_state.step = 2
                 st.rerun()
 
             except Exception as e:
-                st.error(str(e))
+                st.error(f"Lỗi khi gọi Imagen sinh ảnh: {str(e)}")
 
         else:
             st.error(
@@ -394,7 +391,7 @@ theo system instruction.
 
 
 # ==============================================================================
-# CHẶNG 2
+# CHẶNG 2: XEM 2 OPTION & TINH CHỈNH
 # ==============================================================================
 
 elif st.session_state.step == 2:
@@ -509,7 +506,7 @@ Hãy xử lý đúng GIAI_DOAN_2_CHOT_HA theo system instruction.
                 st.session_state.final_result_data = result
 
                 try:
-                    with st.spinner("🖼️ Đang tạo bức ảnh hoàn chỉnh..."):
+                    with st.spinner("🖼️ Đang xuất bức ảnh hoàn chỉnh cuối cùng..."):
                         st.session_state.final_img = generate_image(final_prompt, api_key=GEMINI_API_KEY)
 
                     st.session_state.chosen_option = selected
@@ -517,7 +514,7 @@ Hãy xử lý đúng GIAI_DOAN_2_CHOT_HA theo system instruction.
                     st.rerun()
 
                 except Exception as e:
-                    st.error(str(e))
+                    st.error(f"Lỗi Imagen: {str(e)}")
 
             else:
                 st.error(
@@ -527,7 +524,7 @@ Hãy xử lý đúng GIAI_DOAN_2_CHOT_HA theo system instruction.
 
 
 # ==============================================================================
-# CHẶNG 3
+# CHẶNG 3: HIỂN THỊ KẾT QUẢ & TRI THỨC DI SẢN CHI TIẾT
 # ==============================================================================
 
 elif st.session_state.step == 3:
