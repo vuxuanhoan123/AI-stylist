@@ -485,7 +485,7 @@ def goi_ai_stylist(
   :return: dict Python chứa dữ liệu chuẩn theo Schema
   """
   # Xử lý lấy API Key linh hoạt tránh crash máy Hoàn
-  key_to_use = api_key or os.environ.get("GEMINI_API_KEY")
+  key_to_use = api_key or st.secrets.get("GEMINI_API_KEY") or os.environ.get("GEMINI_API_KEY")
   if not key_to_use:
     return {
         "status": "GLITCH_DETECTED",
@@ -514,17 +514,23 @@ def goi_ai_stylist(
       response_schema=STRUCTURED_OUTPUT_SCHEMA,
   )
 
-  # Gom nội dung gửi đi (Multimodal nếu có ảnh)
-  contents = []
-  if image_input is not None:
-    # Hỗ trợ cả file object từ st.file_uploader
-    if hasattr(image_input, "read"):
-      img = Image.open(image_input)
-      contents.append(img)
-    elif isinstance(image_input, Image.Image):
-      contents.append(image_input)
+   # Gom nội dung gửi đi (Multimodal nếu có ảnh)
+    contents = []
+    if image_input is not None:
+      if hasattr(image_input, "read"):
+        img_bytes = image_input.read()
+      elif isinstance(image_input, bytes):
+        img_bytes = image_input
+      else:
+        buf = io.BytesIO()
+        image_input.save(buf, format="JPEG")
+        img_bytes = buf.getvalue()
 
-  contents.append(user_prompt)
+      contents.append(
+          types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg")
+      )
+
+    contents.append(user_prompt)
 
   try:
     response = client.models.generate_content(
