@@ -7,7 +7,7 @@ import streamlit as st
 from PIL import Image
 from google import genai
 
-from ai_engine import ai_engine
+from ai_engine import goi_ai_stylish
 
 
 # ==============================================================================
