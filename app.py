@@ -6,6 +6,7 @@ import os
 import streamlit as st
 from PIL import Image
 from google import genai
+from google.genai import types
 
 from ai_engine import goi_ai_stylist
 
@@ -38,33 +39,29 @@ GEMINI_API_KEY = get_api_key()
 
 # ==============================================================================
 # TẠO ẢNH BẰNG GEMINI IMAGE MODEL
-#
-# ai_engine.py mới của bạn chỉ đóng gói phần Gemini phân tích + tạo prompt.
-# Vì vậy phần tạo ảnh được để riêng trong app.py.
 # ==============================================================================
 
 def generate_image(prompt_text, api_key=None):
-  """Sinh ảnh chuẩn từ Imagen API thông qua google-genai SDK."""
-  key = api_key or get_api_key()
-  if not key:
-    raise RuntimeError("Chưa cấu hình GEMINI_API_KEY.")
+    """Sinh ảnh chuẩn từ Imagen API thông qua google-genai SDK."""
+    key = api_key or get_api_key()
+    if not key:
+        raise RuntimeError("Chưa cấu hình GEMINI_API_KEY.")
 
-  client = genai.Client(api_key=key)
+    client = genai.Client(api_key=key)
 
-  try:
-    result = client.models.generate_images(
-        model="imagen-3.0-generate-002",
-        prompt=prompt_text,
-        config=types.GenerateImagesConfig(
-            number_of_images=1,
-            aspect_ratio="3:4",
-            output_mime_type="image/png",
-        ),
-    )
-    # Lấy byte ảnh trực tiếp
-    return result.generated_images[0].image.image_bytes
-  except Exception as e:
-    raise RuntimeError(f"Lỗi tạo ảnh Imagen: {e}")
+    try:
+        result = client.models.generate_images(
+            model="imagen-3.0-generate-002",
+            prompt=prompt_text,
+            config=types.GenerateImagesConfig(
+                number_of_images=1,
+                aspect_ratio="3:4",
+                output_mime_type="image/png",
+            ),
+        )
+        return result.generated_images[0].image.image_bytes
+    except Exception as e:
+        raise RuntimeError(f"Lỗi tạo ảnh Imagen: {e}")
 
 
 # ==============================================================================
@@ -317,7 +314,6 @@ if st.session_state.step == 1:
             st.error("Vui lòng tải ảnh chân dung.")
             st.stop()
 
-        # Đọc bytes trước khi Streamlit rerun.
         portrait_bytes = uploaded_file.getvalue()
         portrait_mime = uploaded_file.type or "image/jpeg"
 
@@ -514,7 +510,7 @@ Hãy xử lý đúng GIAI_DOAN_2_CHOT_HA theo system instruction.
 
                 try:
                     with st.spinner("🖼️ Đang tạo bức ảnh hoàn chỉnh..."):
-                        st.session_state.final_img = generate_image( final_prompt, api_key=GEMINI_API_KEY)
+                        st.session_state.final_img = generate_image(final_prompt, api_key=GEMINI_API_KEY)
 
                     st.session_state.chosen_option = selected
                     st.session_state.step = 3
