@@ -4,6 +4,8 @@ import io
 import os
 import requests
 
+import urllib.parse
+import requests
 import streamlit as st
 from PIL import Image
 from google import genai
@@ -43,48 +45,29 @@ GEMINI_API_KEY = get_api_key()
 # ==============================================================================
 
 def generate_image(prompt_text, api_key=None):
-    """Sinh ảnh Imagen 3 qua REST API với cơ chế bắt lỗi chi tiết."""
-    key = api_key or get_api_key()
-    if not key:
-        raise RuntimeError("Chưa cấu hình GEMINI_API_KEY.")
-
-    headers = {"Content-Type": "application/json"}
-    model_name = "imagen-3.0-generate-002"
-
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:predict?key={key}"
-    payload = {
-        "instances": [{"prompt": prompt_text}],
-        "parameters": {
-            "sampleCount": 1,
-            "aspectRatio": "3:4",
-            "outputOptions": {"mimeType": "image/png"},
-        },
-    }
-
+    """
+    Sinh ảnh chất lượng cao qua Pollinations AI (mô hình FLUX).
+    Miễn phí 100%, không giới hạn lượt gọi và không lo lỗi Quota/404.
+    """
     try:
-        response = requests.post(url, json=payload, headers=headers, timeout=60)
-        
+        # 1. Mã hóa câu prompt tiếng Anh do Gemini xuất ra để hợp lệ trên URL
+        encoded_prompt = urllib.parse.quote(prompt_text)
+
+        # 2. Tạo đường dẫn gọi trực tiếp mô hình FLUX (tỉ lệ 3:4, ẩn logo)
+        image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=768&height=1024&nologo=true&model=flux"
+
+        # 3. Gửi yêu cầu tải ảnh (timeout 45 giây để chờ render)
+        response = requests.get(image_url, timeout=45)
+
         if response.status_code == 200:
-            res_data = response.json()
-            if "predictions" in res_data and len(res_data["predictions"]) > 0:
-                pred = res_data["predictions"][0]
-                img_b64 = pred.get("bytesBase64Encoded") or (
-                    pred.get("image", {}).get("imageBytes")
-                    if isinstance(pred.get("image"), dict)
-                    else None
-                )
-                if img_b64:
-                    return base64.b64decode(img_b64)
-            
-            # Trường hợp 200 OK nhưng không có dữ liệu ảnh (vd: bị Safety Filter chặn prompt)
-            err_detail = f"API trả về 200 OK nhưng không có ảnh. Phản hồi: {response.text}"
+            return response.content
         else:
-            err_detail = f"Mã lỗi HTTP {response.status_code}: {response.text}"
+            raise RuntimeError(
+                f"Lỗi máy chủ Pollinations AI: Mã HTTP {response.status_code}"
+            )
 
     except Exception as e:
-        err_detail = f"Lỗi kết nối mạng: {str(e)}"
-
-    raise RuntimeError(err_detail)
+        raise RuntimeError(f"Không thể tạo ảnh từ Pollinations AI: {str(e)}")
 # ==============================================================================
 # DỮ LIỆU UI
 # ==============================================================================
