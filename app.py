@@ -184,17 +184,23 @@ def parse_two_prompts(prompt_string):
 
 
 def show_error_from_ai(result):
-    """Hiển thị lỗi/cảnh báo theo JSON mà ai_engine.py trả về."""
+    """Hiển thị chi tiết lỗi/cảnh báo và bổ sung cơ chế khởi động lại giao diện."""
     error_code = result.get("error_code")
     warning = result.get("canh_bao")
+    loi_khuyen = result.get("loi_khuyen")
 
     if error_code:
-        st.error(f"⛔ Lỗi quy chuẩn: {error_code}")
+        st.error(f"⛔ Lỗi quy chuẩn cổ phục: {error_code}")
 
     if warning:
-        st.error(warning)
-    else:
-        st.error("⛔ AI đã chặn luồng xử lý do vi phạm quy chuẩn văn hóa.")
+        st.error(f"⚠️ {warning}")
+
+    if loi_khuyen:
+        st.info(f"💡 Lời khuyên: {loi_khuyen}")
+
+    # 🔄 CƠ CHẾ KHỞI ĐỘNG LẠI LUỒNG TRÊN GIAO DIỆN STREAMLIT
+    if st.button("🔄 Thử lại lượt này ngay", type="secondary"):
+        st.rerun()
 
 
 # ==============================================================================
