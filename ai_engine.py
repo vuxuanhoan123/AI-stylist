@@ -474,7 +474,7 @@ def goi_ai_stylist(
     user_prompt: str,
     image_input=None,
     api_key: str = None,
-    model_name: str = "gemini-2.5-flash",
+    model_name: str = "gemini-3.8-flash",
 ) -> dict:
     """Hàm điều phối gọi AI Stylist có xử lý fallback và báo lỗi chi tiết."""
     key_to_use = (
@@ -514,7 +514,7 @@ def goi_ai_stylist(
     contents.append(user_prompt)
 
     # Danh sách model thử nghiệm theo thứ tự ưu tiên
-    candidate_models = [model_name, "gemini-2.5-flash", "gemini-1.5-flash", "gemini-1.5-pro"]
+    candidate_models = [model_name]
     candidate_models = list(dict.fromkeys([m for m in candidate_models if m]))
 
     last_error = None
