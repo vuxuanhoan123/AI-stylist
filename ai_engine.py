@@ -474,9 +474,9 @@ def goi_ai_stylist(
     user_prompt: str,
     image_input=None,
     api_key: str = None,
-    model_name: str = "gemini-2.5-flash",  # ⚡ DÙNG DUY NHẤT 1 MODEL NÀY
+    model_name: str = "gemini-3.8-flash",  # ✅ Đã đổi chính xác theo yêu cầu từ Google
 ) -> dict:
-    """Hàm điều phối gọi AI Stylist - Chỉ sử dụng đúng 1 mô hình gemini-2.5-flash duy nhất."""
+    """Hàm điều phối gọi AI Stylist dùng duy nhất gemini-3.8-flash kèm cơ chế Auto-Retry ngầm."""
     key_to_use = (
         api_key
         or (st.secrets.get("GEMINI_API_KEY") if hasattr(st, "secrets") else None)
@@ -487,8 +487,8 @@ def goi_ai_stylist(
         return {
             "status": "GLITCH_DETECTED",
             "error_code": None,
-            "canh_bao": "Chưa cấu hình API Key! Vui lòng kiểm tra lại secrets/môi trường.",
-            "loi_khuyen": "Hệ thống tạm ngắt kết nối do thiếu API Key.",
+            "canh_bao": "Chưa cấu hình GEMINI_API_KEY trong Streamlit Secrets!",
+            "loi_khuyen": "Vui lòng kiểm tra lại secrets hoặc môi trường.",
             "kien_thuc_lich_su": None,
             "prompt_image": None,
             "chi_tiet_phoi": None,
@@ -496,7 +496,6 @@ def goi_ai_stylist(
 
     client = genai.Client(api_key=key_to_use)
 
-    # Đóng gói dữ liệu gửi đi (Ảnh chân dung + Prompt)
     contents = []
     if image_input is not None:
         if hasattr(image_input, "read"):
@@ -514,32 +513,41 @@ def goi_ai_stylist(
 
     contents.append(user_prompt)
 
-    # Cấu hình duy nhất chuẩn xác
     config = types.GenerateContentConfig(
         temperature=0.2,
         top_p=0.85,
         system_instruction=SYSTEM_INSTRUCTION_TEXT,
         response_mime_type="application/json",
         response_schema=STRUCTURED_OUTPUT_SCHEMA,
-        thinking_config=types.ThinkingConfig(thinking_budget=0),
     )
 
-    # Gọi trực tiếp API duy nhất 1 lần, không thử model khác
-    try:
-        response = client.models.generate_content(
-            model=model_name,
-            contents=contents,
-            config=config,
-        )
-        return json.loads(response.text)
-    except Exception as e:
-        err_str = str(e)
-        return {
-            "status": "GLITCH_DETECTED",
-            "error_code": None,
-            "canh_bao": f"Lỗi gọi Gemini ({model_name}): {err_str}",
-            "loi_khuyen": "Nếu báo 429 RESOURCE_EXHAUSTED, bạn hãy đổi GEMINI_API_KEY sang một Gmail khác để có lại lượt gọi miễn phí.",
-            "kien_thuc_lich_su": None,
-            "prompt_image": None,
-            "chi_tiet_phoi": None,
-        }
+    # 🔁 CƠ CHẾ AUTO-RETRY NGẦM: THỬ LẠI TỐI ĐA 3 LẦN NẾU MẠNG MÁY CHỦ BỊ NGHẼN TẠM THỜI
+    max_retries = 3
+    last_error = ""
+
+    for attempt in range(max_retries):
+        try:
+            response = client.models.generate_content(
+                model=model_name,
+                contents=contents,
+                config=config,
+            )
+            return json.loads(response.text)
+        except Exception as e:
+            last_error = str(e)
+            # Nếu nghẽn mạng tạm thời 503 hoặc 429, tạm dừng 2 giây rồi tự động thử lại
+            if "503" in last_error or "429" in last_error or "UNAVAILABLE" in last_error:
+                time.sleep(2)
+                continue
+            else:
+                break
+
+    return {
+        "status": "GLITCH_DETECTED",
+        "error_code": None,
+        "canh_bao": f"Lỗi gọi Gemini ({model_name}): {last_error}",
+        "loi_khuyen": "Nếu báo 429 RESOURCE_EXHAUSTED, bạn hãy đổi GEMINI_API_KEY sang một Gmail mới. Hoặc nhấn nút '🔄 Thử lại lượt này ngay' bên dưới.",
+        "kien_thuc_lich_su": None,
+        "prompt_image": None,
+        "chi_tiet_phoi": None,
+    }
