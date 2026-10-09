@@ -476,7 +476,7 @@ def goi_ai_stylist(
     api_key: str = None,
     model_name: str = "gemini-2.5-flash",
 ) -> dict:
-    """Hàm điều phối gọi AI Stylist có tích hợp Auto-Retry & Fallback chống lỗi 503/429/404."""
+    """Hàm điều phối gọi AI Stylist có xử lý fallback và báo lỗi chi tiết."""
     key_to_use = (
         api_key
         or (st.secrets.get("GEMINI_API_KEY") if hasattr(st, "secrets") else None)
@@ -496,7 +496,6 @@ def goi_ai_stylist(
 
     client = genai.Client(api_key=key_to_use)
 
-    # Gom nội dung gửi (multimodal)
     contents = []
     if image_input is not None:
         if hasattr(image_input, "read"):
@@ -514,23 +513,22 @@ def goi_ai_stylist(
 
     contents.append(user_prompt)
 
-    # Ưu tiên các model ổn định hiện hành
+    # Danh sách model thử nghiệm theo thứ tự ưu tiên
     candidate_models = [model_name, "gemini-2.5-flash", "gemini-1.5-flash", "gemini-1.5-pro"]
     candidate_models = list(dict.fromkeys([m for m in candidate_models if m]))
 
     last_error = None
 
     for target_model in candidate_models:
-        # Cấu hình linh hoạt: Chỉ gắn thinking_config cho các model hỗ trợ (dòng 2.5/3.x)
         config_args = {
             "temperature": 0.2,
             "top_p": 0.85,
-            "max_output_tokens": 65536,
             "system_instruction": SYSTEM_INSTRUCTION_TEXT,
             "response_mime_type": "application/json",
             "response_schema": STRUCTURED_OUTPUT_SCHEMA,
         }
 
+        # Chỉ gắn thinking_config cho dòng model 2.5/3.x
         if "2.5" in target_model or "3." in target_model:
             config_args["thinking_config"] = types.ThinkingConfig(thinking_budget=0)
 
@@ -544,19 +542,15 @@ def goi_ai_stylist(
                 return json.loads(response.text)
             except Exception as e:
                 last_error = str(e)
-                # Nếu nghẽn 503 hoặc quá tải 429, chờ 1s rồi thử lại
-                if "503" in last_error or "UNAVAILABLE" in last_error or "429" in last_error:
-                    time.sleep(1)
-                    continue
-                else:
-                    # Lỗi khác (404/400) -> Chuyển ngay sang candidate_model tiếp theo
-                    break
+                time.sleep(1)
+                continue
 
+    # Trả về thông báo lỗi thực tế từ Google API để dễ nhận biết nguyên nhân (429 hay 503)
     return {
         "status": "GLITCH_DETECTED",
         "error_code": None,
-        "canh_bao": "Máy chủ Google Gemini đang quá tải toàn hệ thống. Vui lòng thử lại sau giây lát!",
-        "loi_khuyen": f"Chi tiết lỗi từ Google: {last_error}",
+        "canh_bao": f"Không thể kết nối API Google Gemini. Chi tiết: {last_error}",
+        "loi_khuyen": "Nếu gặp lỗi 429 Quota Exceeded, vui lòng đổi GEMINI_API_KEY từ tài khoản Gmail mới.",
         "kien_thuc_lich_su": None,
         "prompt_image": None,
         "chi_tiet_phoi": None,
