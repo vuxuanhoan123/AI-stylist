@@ -467,7 +467,7 @@ SYSTEM_INSTRUCTION_TEXT = """{
 }"""
 
 
-def ai_engine(
+def goi_ai_stylist(
     user_prompt: str,
     image_input=None,
     api_key: str = None,
