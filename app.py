@@ -7,6 +7,7 @@ import streamlit as st
 from PIL import Image
 from google import genai
 from google.genai import types
+import requests  # Thêm import requests ở đầu file
 
 from ai_engine import goi_ai_stylist
 
@@ -42,27 +43,55 @@ GEMINI_API_KEY = get_api_key()
 # ==============================================================================
 
 def generate_image(prompt_text, api_key=None):
-    """Sinh ảnh chuẩn từ Imagen API thông qua google-genai SDK."""
+    """Sinh ảnh Imagen 3 qua REST API tương thích với Google AI Studio Key."""
     key = api_key or get_api_key()
     if not key:
         raise RuntimeError("Chưa cấu hình GEMINI_API_KEY.")
 
-    client = genai.Client(api_key=key)
+    headers = {"Content-Type": "application/json"}
+    
+    # 1. Thử Endpoint predict chính thức của AI Studio
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key={key}"
+    payload = {
+        "instances": [{"prompt": prompt_text}],
+        "parameters": {
+            "sampleCount": 1,
+            "aspectRatio": "3:4",
+            "outputOptions": {"mimeType": "image/png"}
+        }
+    }
 
-    try:
-        result = client.models.generate_images(
-            model="imagen-3.0-generate-002",
-            prompt=prompt_text,
-            config=types.GenerateImagesConfig(
-                number_of_images=1,
-                aspect_ratio="3:4",
-                output_mime_type="image/png",
-            ),
-        )
-        # Lấy byte ảnh trực tiếp
-        return result.generated_images[0].image.image_bytes
-    except Exception as e:
-        raise RuntimeError(f"Lỗi tạo ảnh Imagen: {e}")
+    response = requests.post(url, json=payload, headers=headers)
+
+    if response.status_code == 200:
+        res_data = response.json()
+        if "predictions" in res_data and len(res_data["predictions"]) > 0:
+            pred = res_data["predictions"][0]
+            img_b64 = pred.get("bytesBase64Encoded") or (pred.get("image", {}).get("imageBytes") if isinstance(pred.get("image"), dict) else None)
+            if img_b64:
+                return base64.b64decode(img_b64)
+
+    # 2. Endpoint dự phòng generateImages
+    url_alt = f"https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:generateImages?key={key}"
+    payload_alt = {
+        "prompt": prompt_text,
+        "config": {
+            "numberOfImages": 1,
+            "aspectRatio": "3:4",
+            "outputMimeType": "image/png"
+        }
+    }
+    
+    response_alt = requests.post(url_alt, json=payload_alt, headers=headers)
+    if response_alt.status_code == 200:
+        res_data_alt = response_alt.json()
+        if "generatedImages" in res_data_alt and len(res_data_alt["generatedImages"]) > 0:
+            img_b64 = res_data_alt["generatedImages"][0].get("image", {}).get("imageBytes")
+            if img_b64:
+                return base64.b64decode(img_b64)
+
+    err_msg = response.text if response.status_code != 200 else response_alt.text
+    raise RuntimeError(f"Lỗi tạo ảnh Imagen từ API: {err_msg}")
 
 
 # ==============================================================================
