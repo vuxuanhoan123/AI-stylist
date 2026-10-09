@@ -43,50 +43,28 @@ GEMINI_API_KEY = get_api_key()
 # Vì vậy phần tạo ảnh được để riêng trong app.py.
 # ==============================================================================
 
-def generate_image(prompt_text, image_bytes=None, mime_type="image/jpeg", api_key=None):
-    """
-    Sinh ảnh từ prompt.
-    Nếu có ảnh chân dung, ảnh đó được gửi cùng prompt để model giữ đặc điểm
-    của người dùng tốt hơn.
-    """
-    key = api_key or get_api_key()
+def generate_image(prompt_text, api_key=None):
+  """Sinh ảnh chuẩn từ Imagen API thông qua google-genai SDK."""
+  key = api_key or get_api_key()
+  if not key:
+    raise RuntimeError("Chưa cấu hình GEMINI_API_KEY.")
 
-    if not key:
-        raise RuntimeError("Chưa cấu hình GEMINI_API_KEY.")
+  client = genai.Client(api_key=key)
 
-    client = genai.Client(api_key=key)
-
-    contents = [prompt_text]
-
-    if image_bytes:
-        try:
-            source_image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-            contents.append(source_image)
-        except Exception as e:
-            raise RuntimeError(f"Không đọc được ảnh chân dung: {e}")
-
-    try:
-        response = client.models.generate_content(
-            model="gemini-3.1-flash-image",
-            contents=contents,
-        )
-
-        # Tìm phần ảnh trong response.
-        for part in response.parts:
-            if getattr(part, "inline_data", None) is not None:
-                image = part.as_image()
-
-                buffer = io.BytesIO()
-                image.save(buffer, format="PNG")
-                return buffer.getvalue()
-
-        raise RuntimeError(
-            "Gemini không trả về ảnh. "
-            f"Phản hồi: {getattr(response, 'text', '')}"
-        )
-
-    except Exception as e:
-        raise RuntimeError(f"Lỗi tạo ảnh Gemini: {e}")
+  try:
+    result = client.models.generate_images(
+        model="imagen-3.0-generate-002",
+        prompt=prompt_text,
+        config=types.GenerateImagesConfig(
+            number_of_images=1,
+            aspect_ratio="3:4",
+            output_mime_type="image/png",
+        ),
+    )
+    # Lấy byte ảnh trực tiếp
+    return result.generated_images[0].image.image_bytes
+  except Exception as e:
+    raise RuntimeError(f"Lỗi tạo ảnh Imagen: {e}")
 
 
 # ==============================================================================
@@ -401,20 +379,10 @@ theo system instruction.
 
             try:
                 with st.spinner("🎨 Đang tạo ảnh Option A..."):
-                    st.session_state.img_a = generate_image(
-                        prompt_a,
-                        image_bytes=portrait_bytes,
-                        mime_type=portrait_mime,
-                        api_key=GEMINI_API_KEY,
-                    )
+                    st.session_state.img_a = generate_image(prompt_a, api_key=GEMINI_API_KEY)
 
                 with st.spinner("🎨 Đang tạo ảnh Option B..."):
-                    st.session_state.img_b = generate_image(
-                        prompt_b,
-                        image_bytes=portrait_bytes,
-                        mime_type=portrait_mime,
-                        api_key=GEMINI_API_KEY,
-                    )
+                    st.session_state.img_b = generate_image(prompt_b, api_key=GEMINI_API_KEY)
 
                 st.session_state.step = 2
                 st.rerun()
@@ -546,12 +514,7 @@ Hãy xử lý đúng GIAI_DOAN_2_CHOT_HA theo system instruction.
 
                 try:
                     with st.spinner("🖼️ Đang tạo bức ảnh hoàn chỉnh..."):
-                        st.session_state.final_img = generate_image(
-                            final_prompt,
-                            image_bytes=st.session_state.portrait_bytes,
-                            mime_type=st.session_state.portrait_mime,
-                            api_key=GEMINI_API_KEY,
-                        )
+                        st.session_state.final_img = generate_image( final_prompt, api_key=GEMINI_API_KEY)
 
                     st.session_state.chosen_option = selected
                     st.session_state.step = 3
