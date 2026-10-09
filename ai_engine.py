@@ -1,6 +1,7 @@
 import io
 import json
 import os
+import time
 import streamlit as st
 from google import genai
 from google.genai import types
@@ -469,15 +470,13 @@ SYSTEM_INSTRUCTION_TEXT = """{
 }"""
 
 
-import time  # Thêm import time ở đầu file ai_engine.py
-
 def goi_ai_stylist(
     user_prompt: str,
     image_input=None,
     api_key: str = None,
     model_name: str = "gemini-2.5-flash",
 ) -> dict:
-    """Hàm điều phối gọi AI Stylist có tích hợp Auto-Retry & Fallback chống lỗi 503/429."""
+    """Hàm điều phối gọi AI Stylist có tích hợp Auto-Retry & Fallback chống lỗi 503/429/404."""
     key_to_use = (
         api_key
         or (st.secrets.get("GEMINI_API_KEY") if hasattr(st, "secrets") else None)
@@ -497,17 +496,7 @@ def goi_ai_stylist(
 
     client = genai.Client(api_key=key_to_use)
 
-    config = types.GenerateContentConfig(
-        temperature=0.2,
-        top_p=0.85,
-        max_output_tokens=65536,
-        thinking_config=types.ThinkingConfig(thinking_budget=0),
-        system_instruction=SYSTEM_INSTRUCTION_TEXT,
-        response_mime_type="application/json",
-        response_schema=STRUCTURED_OUTPUT_SCHEMA,
-    )
-
-    # Chuẩn bị nội dung gửi (multimodal)
+    # Gom nội dung gửi (multimodal)
     contents = []
     if image_input is not None:
         if hasattr(image_input, "read"):
@@ -525,16 +514,29 @@ def goi_ai_stylist(
 
     contents.append(user_prompt)
 
-    # Danh sách các model ổn định để tự động thử lần lượt nếu bị nghẽn 503 / 429
+    # Ưu tiên các model ổn định hiện hành
     candidate_models = [model_name, "gemini-2.5-flash", "gemini-1.5-flash", "gemini-1.5-pro"]
-    # Bỏ trùng lặp giữ nguyên thứ tự
     candidate_models = list(dict.fromkeys([m for m in candidate_models if m]))
 
     last_error = None
 
     for target_model in candidate_models:
-        # Thử tối đa 3 lần cho mỗi model nếu gặp lỗi 503/429
-        for attempt in range(3):
+        # Cấu hình linh hoạt: Chỉ gắn thinking_config cho các model hỗ trợ (dòng 2.5/3.x)
+        config_args = {
+            "temperature": 0.2,
+            "top_p": 0.85,
+            "max_output_tokens": 65536,
+            "system_instruction": SYSTEM_INSTRUCTION_TEXT,
+            "response_mime_type": "application/json",
+            "response_schema": STRUCTURED_OUTPUT_SCHEMA,
+        }
+
+        if "2.5" in target_model or "3." in target_model:
+            config_args["thinking_config"] = types.ThinkingConfig(thinking_budget=0)
+
+        config = types.GenerateContentConfig(**config_args)
+
+        for attempt in range(2):
             try:
                 response = client.models.generate_content(
                     model=target_model, contents=contents, config=config
@@ -542,19 +544,18 @@ def goi_ai_stylist(
                 return json.loads(response.text)
             except Exception as e:
                 last_error = str(e)
-                # Nếu bị nghẽn mạng 503 hoặc quá tải 429, tạm dừng 2s rồi thử lại
+                # Nếu nghẽn 503 hoặc quá tải 429, chờ 1s rồi thử lại
                 if "503" in last_error or "UNAVAILABLE" in last_error or "429" in last_error:
-                    time.sleep(2)
+                    time.sleep(1)
                     continue
                 else:
-                    # Nếu là lỗi khác (vd model 404), chuyển ngay sang model tiếp theo
+                    # Lỗi khác (404/400) -> Chuyển ngay sang candidate_model tiếp theo
                     break
 
-    # Nếu tất cả các model và lần thử đều thất bại
     return {
         "status": "GLITCH_DETECTED",
         "error_code": None,
-        "canh_bao": "Máy chủ Google Gemini đang quá tải toàn hệ thống. Vui lòng đợi 10-15 giây rồi ấn nút thử lại!",
+        "canh_bao": "Máy chủ Google Gemini đang quá tải toàn hệ thống. Vui lòng thử lại sau giây lát!",
         "loi_khuyen": f"Chi tiết lỗi từ Google: {last_error}",
         "kien_thuc_lich_su": None,
         "prompt_image": None,
