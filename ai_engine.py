@@ -474,7 +474,7 @@ def goi_ai_stylist(
     user_prompt: str,
     image_input=None,
     api_key: str = None,
-    model_name: str = "gemini-3.8-flash",
+    model_name: str = "gemini-3.1-pro",
 ) -> dict:
     """Hàm điều phối gọi AI Stylist có xử lý fallback và báo lỗi chi tiết."""
     key_to_use = (
