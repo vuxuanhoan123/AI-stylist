@@ -1,10 +1,12 @@
+import io
 import json
 import os
+import streamlit as st
 from google import genai
 from google.genai import types
 from PIL import Image
 
-# 1. CẤU HÌNH STRUCTURED OUTPUT SCHEMA (GIỮ NGUYÊN 100%)
+# 1. CẤU HÌNH STRUCTURED OUTPUT SCHEMA
 STRUCTURED_OUTPUT_SCHEMA = {
     "type": "object",
     "properties": {
@@ -57,7 +59,7 @@ STRUCTURED_OUTPUT_SCHEMA = {
     "required": ["status", "loi_khuyen"],
 }
 
-# 2. BỘ NỘI DUNG SYSTEM INSTRUCTION ĐÃ CHUẨN HÓA FIREBASE (VERSION 2_1)
+# 2. BỘ NỘI DUNG SYSTEM INSTRUCTION
 SYSTEM_INSTRUCTION_TEXT = """{
   "luat_khoa_sinh_anh": {
     "mo_ta": "Cơ chế an toàn ngắt luồng visual khi vi phạm quy chuẩn văn hóa hoặc giải phẫu trang phục",
@@ -473,78 +475,68 @@ def goi_ai_stylist(
     api_key: str = None,
     model_name: str = "gemini-2.5-pro",
 ) -> dict:
-  """Hàm điều phối gọi AI Stylist phục vụ ứng dụng Streamlit.
+    """Hàm điều phối gọi AI Stylist phục vụ ứng dụng Streamlit."""
+    key_to_use = (
+        api_key
+        or (st.secrets.get("GEMINI_API_KEY") if hasattr(st, "secrets") else None)
+        or os.environ.get("GEMINI_API_KEY")
+    )
+    
+    if not key_to_use:
+        return {
+            "status": "GLITCH_DETECTED",
+            "error_code": None,
+            "canh_bao": (
+                "Chưa cấu hình API Key! Vui lòng nhập GEMINI_API_KEY vào secrets"
+                " hoặc biến môi trường."
+            ),
+            "loi_khuyen": "Hệ thống tạm ngắt kết nối do thiếu API Key.",
+            "kien_thuc_lich_su": None,
+            "prompt_image": None,
+            "chi_tiet_phoi": None,
+        }
 
-  :param user_prompt: Nội dung text từ form người dùng (BMI, Vibe, Feedback...)
-  :param image_input: Ảnh người dùng tải lên (PIL Image, bytes, hoặc
-  st.file_uploader)
-  :param api_key: Key Gemini API (ưu tiên truyền trực tiếp, fallback lấy từ
-  os.environ)
-  :param model_name: Bản model ổn định với Structured Output (mặc định
-  gemini-2.5-pro)
-  :return: dict Python chứa dữ liệu chuẩn theo Schema
-  """
-  # Xử lý lấy API Key linh hoạt tránh crash máy Hoàn
-  key_to_use = api_key or st.secrets.get("GEMINI_API_KEY") or os.environ.get("GEMINI_API_KEY")
-  if not key_to_use:
-    return {
-        "status": "GLITCH_DETECTED",
-        "error_code": None,
-        "canh_bao": (
-            "Chưa cấu hình API Key! Vui lòng nhập GEMINI_API_KEY vào ô cài"
-            " đặt hoặc biến môi trường."
-        ),
-        "loi_khuyen": "Hệ thống tạm ngắt kết nối do thiếu API Key.",
-        "kien_thuc_lich_su": None,
-        "prompt_image": None,
-        "chi_tiet_phoi": None,
-    }
+    client = genai.Client(api_key=key_to_use)
 
-  # Khởi tạo Client từ SDK mới
-  client = genai.Client(api_key=key_to_use)
+    config = types.GenerateContentConfig(
+        temperature=0.2,
+        top_p=0.85,
+        max_output_tokens=65536,
+        thinking_config=types.ThinkingConfig(thinking_budget=0),
+        system_instruction=SYSTEM_INSTRUCTION_TEXT,
+        response_mime_type="application/json",
+        response_schema=STRUCTURED_OUTPUT_SCHEMA,
+    )
 
-  # Cấu hình generation parameters
-  config = types.GenerateContentConfig(
-      temperature=0.2,
-      top_p=0.85,
-      max_output_tokens=65536,
-      thinking_config=types.ThinkingConfig(thinking_budget=0),
-      system_instruction=SYSTEM_INSTRUCTION_TEXT,
-      response_mime_type="application/json",
-      response_schema=STRUCTURED_OUTPUT_SCHEMA,
-  )
-
-   # Gom nội dung gửi đi (Multimodal nếu có ảnh)
     contents = []
     if image_input is not None:
-      if hasattr(image_input, "read"):
-        img_bytes = image_input.read()
-      elif isinstance(image_input, bytes):
-        img_bytes = image_input
-      else:
-        buf = io.BytesIO()
-        image_input.save(buf, format="JPEG")
-        img_bytes = buf.getvalue()
+        if hasattr(image_input, "read"):
+            img_bytes = image_input.read()
+        elif isinstance(image_input, bytes):
+            img_bytes = image_input
+        else:
+            buf = io.BytesIO()
+            image_input.save(buf, format="JPEG")
+            img_bytes = buf.getvalue()
 
-      contents.append(
-          types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg")
-      )
+        contents.append(
+            types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg")
+        )
 
     contents.append(user_prompt)
 
-  try:
-    response = client.models.generate_content(
-        model=model_name, contents=contents, config=config
-    )
-    # Tự động parse JSON thành Dict Python
-    return json.loads(response.text)
-  except Exception as e:
-    return {
-        "status": "GLITCH_DETECTED",
-        "error_code": None,
-        "canh_bao": f"Lỗi hệ thống khi gọi Gemini: {str(e)}",
-        "loi_khuyen": "Vui lòng thử lại sau giây lát.",
-        "kien_thuc_lich_su": None,
-        "prompt_image": None,
-        "chi_tiet_phoi": None,
-    }
+    try:
+        response = client.models.generate_content(
+            model=model_name, contents=contents, config=config
+        )
+        return json.loads(response.text)
+    except Exception as e:
+        return {
+            "status": "GLITCH_DETECTED",
+            "error_code": None,
+            "canh_bao": f"Lỗi hệ thống khi gọi Gemini: {str(e)}",
+            "loi_khuyen": "Vui lòng thử lại sau giây lát.",
+            "kien_thuc_lich_su": None,
+            "prompt_image": None,
+            "chi_tiet_phoi": None,
+        }
