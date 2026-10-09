@@ -43,56 +43,78 @@ GEMINI_API_KEY = get_api_key()
 # ==============================================================================
 
 def generate_image(prompt_text, api_key=None):
-    """Sinh ảnh Imagen 3 qua REST API tương thích với Google AI Studio Key."""
+    """Sinh ảnh Imagen 3 qua REST API, tự động kiểm tra tên model khả dụng."""
     key = api_key or get_api_key()
     if not key:
         raise RuntimeError("Chưa cấu hình GEMINI_API_KEY.")
 
     headers = {"Content-Type": "application/json"}
     
-    # 1. Endpoint predict chính thức của AI Studio
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key={key}"
-    payload = {
-        "instances": [{"prompt": prompt_text}],
-        "parameters": {
-            "sampleCount": 1,
-            "aspectRatio": "3:4",
-            "outputOptions": {"mimeType": "image/png"}
+    # Danh sách các tên mô hình Imagen 3 hỗ trợ trên Google AI Studio
+    imagen_models = [
+        "imagen-3.0-generate-002",
+        "imagen-3.0-fast-generate-001",
+        "imagen-3.0-generate-001",
+    ]
+
+    last_error = ""
+
+    for model_name in imagen_models:
+        # Thử Endpoint 1: :predict
+        url_predict = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:predict?key={key}"
+        payload_predict = {
+            "instances": [{"prompt": prompt_text}],
+            "parameters": {
+                "sampleCount": 1,
+                "aspectRatio": "3:4",
+                "outputOptions": {"mimeType": "image/png"},
+            },
         }
-    }
+        try:
+            res = requests.post(url_predict, json=payload_predict, headers=headers)
+            if res.status_code == 200:
+                res_data = res.json()
+                if "predictions" in res_data and len(res_data["predictions"]) > 0:
+                    pred = res_data["predictions"][0]
+                    img_b64 = pred.get("bytesBase64Encoded") or (
+                        pred.get("image", {}).get("imageBytes")
+                        if isinstance(pred.get("image"), dict)
+                        else None
+                    )
+                    if img_b64:
+                        return base64.b64decode(img_b64)
+            else:
+                last_error = res.text
+        except Exception as e:
+            last_error = str(e)
 
-    response = requests.post(url, json=payload, headers=headers)
-
-    if response.status_code == 200:
-        res_data = response.json()
-        if "predictions" in res_data and len(res_data["predictions"]) > 0:
-            pred = res_data["predictions"][0]
-            img_b64 = pred.get("bytesBase64Encoded") or (pred.get("image", {}).get("imageBytes") if isinstance(pred.get("image"), dict) else None)
-            if img_b64:
-                return base64.b64decode(img_b64)
-
-    # 2. Endpoint dự phòng generateImages
-    url_alt = f"https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:generateImages?key={key}"
-    payload_alt = {
-        "prompt": prompt_text,
-        "config": {
-            "numberOfImages": 1,
-            "aspectRatio": "3:4",
-            "outputMimeType": "image/png"
+        # Thử Endpoint 2: :generateImages
+        url_gen = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateImages?key={key}"
+        payload_gen = {
+            "prompt": prompt_text,
+            "config": {
+                "numberOfImages": 1,
+                "aspectRatio": "3:4",
+                "outputMimeType": "image/png",
+            },
         }
-    }
-    
-    response_alt = requests.post(url_alt, json=payload_alt, headers=headers)
-    if response_alt.status_code == 200:
-        res_data_alt = response_alt.json()
-        if "generatedImages" in res_data_alt and len(res_data_alt["generatedImages"]) > 0:
-            img_b64 = res_data_alt["generatedImages"][0].get("image", {}).get("imageBytes")
-            if img_b64:
-                return base64.b64decode(img_b64)
+        try:
+            res_alt = requests.post(url_gen, json=payload_gen, headers=headers)
+            if res_alt.status_code == 200:
+                res_data_alt = res_alt.json()
+                if (
+                    "generatedImages" in res_data_alt
+                    and len(res_data_alt["generatedImages"]) > 0
+                ):
+                    img_b64 = res_data_alt["generatedImages"][0].get("image", {}).get("imageBytes")
+                    if img_b64:
+                        return base64.b64decode(img_b64)
+            else:
+                last_error = res_alt.text
+        except Exception as e:
+            last_error = str(e)
 
-    err_msg = response.text if response.status_code != 200 else response_alt.text
-    raise RuntimeError(f"Lỗi tạo ảnh Imagen từ API: {err_msg}")
-
+    raise RuntimeError(f"Lỗi tạo ảnh Imagen từ API: {last_error}")
 
 # ==============================================================================
 # DỮ LIỆU UI
