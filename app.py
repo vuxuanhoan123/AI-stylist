@@ -46,28 +46,32 @@ GEMINI_API_KEY = get_api_key()
 
 def generate_image(prompt_text, api_key=None):
     """
-    Sinh ảnh chất lượng cao qua Pollinations AI (mô hình FLUX).
-    Miễn phí 100%, không giới hạn lượt gọi và không lo lỗi Quota/404.
+    Sinh ảnh miễn phí qua Pollinations AI với cơ chế tự chuyển model chống lỗi HTTP 402 (Payment Required).
     """
-    try:
-        # 1. Mã hóa câu prompt tiếng Anh do Gemini xuất ra để hợp lệ trên URL
-        encoded_prompt = urllib.parse.quote(prompt_text)
+    encoded_prompt = urllib.parse.quote(prompt_text)
+    
+    # Danh sách các mô hình miễn phí 100% của Pollinations AI
+    free_models = ["turbo", "flux-realism", "default"]
+    
+    last_error = ""
 
-        # 2. Tạo đường dẫn gọi trực tiếp mô hình FLUX (tỉ lệ 3:4, ẩn logo)
-        image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=768&height=1024&nologo=true&model=flux"
-
-        # 3. Gửi yêu cầu tải ảnh (timeout 45 giây để chờ render)
-        response = requests.get(image_url, timeout=45)
-
-        if response.status_code == 200:
-            return response.content
+    for model_name in free_models:
+        if model_name == "default":
+            url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=768&height=1024&nologo=true"
         else:
-            raise RuntimeError(
-                f"Lỗi máy chủ Pollinations AI: Mã HTTP {response.status_code}"
-            )
+            url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=768&height=1024&nologo=true&model={model_name}"
 
-    except Exception as e:
-        raise RuntimeError(f"Không thể tạo ảnh từ Pollinations AI: {str(e)}")
+        try:
+            response = requests.get(url, timeout=35)
+            # Nếu trả về ảnh thành công 200 OK
+            if response.status_code == 200:
+                return response.content
+            else:
+                last_error = f"Model '{model_name}' báo mã HTTP {response.status_code}"
+        except Exception as e:
+            last_error = f"Lỗi kết nối '{model_name}': {str(e)}"
+
+    raise RuntimeError(f"Không thể tạo ảnh từ Pollinations AI: {last_error}")
 # ==============================================================================
 # DỮ LIỆU UI
 # ==============================================================================
