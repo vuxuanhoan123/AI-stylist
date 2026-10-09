@@ -2,12 +2,12 @@
 import base64
 import io
 import os
+import requests
 
 import streamlit as st
 from PIL import Image
 from google import genai
 from google.genai import types
-import requests  # Thêm import requests ở đầu file
 
 from ai_engine import goi_ai_stylist
 
@@ -39,7 +39,7 @@ GEMINI_API_KEY = get_api_key()
 
 
 # ==============================================================================
-# TẠO ẢNH BẰNG GEMINI IMAGE MODEL (IMAGEN 3)
+# TẠO ẢNH BẰNG IMAGEN 3 TỪ GOOGLE AI STUDIO REST API
 # ==============================================================================
 
 def generate_image(prompt_text, api_key=None):
@@ -50,7 +50,7 @@ def generate_image(prompt_text, api_key=None):
 
     headers = {"Content-Type": "application/json"}
     
-    # 1. Thử Endpoint predict chính thức của AI Studio
+    # 1. Endpoint predict chính thức của AI Studio
     url = f"https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key={key}"
     payload = {
         "instances": [{"prompt": prompt_text}],
