@@ -2,14 +2,10 @@
 import base64
 import io
 import os
-import requests
-
 import urllib.parse
 import requests
 import streamlit as st
 from PIL import Image
-from google import genai
-from google.genai import types
 
 from ai_engine import goi_ai_stylist
 
@@ -41,14 +37,8 @@ GEMINI_API_KEY = get_api_key()
 
 
 # ==============================================================================
-# TẠO ẢNH BẰNG IMAGEN 3 TỪ GOOGLE AI STUDIO REST API
+# TẠO ẢNH BẰNG POLLINATIONS AI (GIẢ LẬP TRÌNH DUYỆT CHỐNG LỖI 402)
 # ==============================================================================
-
-import urllib.parse
-import requests
-
-import urllib.parse
-import requests
 
 def generate_image(prompt_text, api_key=None):
     """
@@ -56,13 +46,9 @@ def generate_image(prompt_text, api_key=None):
     để vượt qua hệ thống chống bot / lỗi HTTP 402.
     """
     try:
-        # 1. Mã hóa prompt tiếng Anh
         encoded_prompt = urllib.parse.quote(prompt_text)
-        
-        # 2. URL sinh ảnh Pollinations tiêu chuẩn
         url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=768&height=1024&nologo=true"
         
-        # 3. GIẢ LẬP TRÌNH DUYỆT (Khắc phục triệt để lỗi HTTP 402 / Chống Bot)
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
@@ -77,6 +63,8 @@ def generate_image(prompt_text, api_key=None):
             
     except Exception as e:
         raise RuntimeError(f"Không thể tạo ảnh từ Pollinations AI: {str(e)}")
+
+
 # ==============================================================================
 # DỮ LIỆU UI
 # ==============================================================================
@@ -142,10 +130,7 @@ def reset_all():
 
 
 def parse_two_prompts(prompt_string):
-    """
-    Tách linh hoạt: OPTION_A: ... ||| OPTION_B: ...
-    Chống bị treo app nếu AI thiếu kí tự |||.
-    """
+    """Tách linh hoạt: OPTION_A: ... ||| OPTION_B: ..."""
     if not prompt_string:
         return "", ""
 
@@ -167,7 +152,7 @@ def parse_two_prompts(prompt_string):
 
 
 def show_error_from_ai(result):
-    """Hiển thị chi tiết lỗi/cảnh báo và bổ sung cơ chế khởi động lại giao diện."""
+    """Hiển thị chi tiết lỗi/cảnh báo."""
     error_code = result.get("error_code")
     warning = result.get("canh_bao")
     loi_khuyen = result.get("loi_khuyen")
@@ -181,7 +166,6 @@ def show_error_from_ai(result):
     if loi_khuyen:
         st.info(f"💡 Lời khuyên: {loi_khuyen}")
 
-    # 🔄 CƠ CHẾ KHỞI ĐỘNG LẠI LUỒNG TRÊN GIAO DIỆN STREAMLIT
     if st.button("🔄 Thử lại lượt này ngay", type="secondary"):
         st.rerun()
 
@@ -191,9 +175,7 @@ def show_error_from_ai(result):
 # ==============================================================================
 
 st.title("👘 VIETNAMESE TRADITIONAL COSTUMES AI STYLIST")
-st.caption(
-    "Ứng dụng phối đồ Cổ phục Việt Nam theo quy chuẩn văn hóa thời Nguyễn"
-)
+st.caption("Ứng dụng phối đồ Cổ phục Việt Nam theo quy chuẩn văn hóa thời Nguyễn")
 
 progress_values = {1: 0.33, 2: 0.66, 3: 1.0}
 st.progress(progress_values[st.session_state.step])
@@ -228,11 +210,7 @@ if st.session_state.step == 1:
         if uploaded_file is not None:
             try:
                 preview = Image.open(uploaded_file)
-                st.image(
-                    preview,
-                    caption="Ảnh chân dung đã chọn",
-                    width=250,
-                )
+                st.image(preview, caption="Ảnh chân dung đã chọn", width=250)
             except Exception:
                 st.error("File ảnh không hợp lệ.")
 
@@ -240,24 +218,15 @@ if st.session_state.step == 1:
 
         with h_cm_col:
             h_cm = st.number_input(
-                "Chiều cao (cm):",
-                min_value=100.0,
-                max_value=220.0,
-                value=165.0,
-                step=0.5,
+                "Chiều cao (cm):", min_value=100.0, max_value=220.0, value=165.0, step=0.5
             )
 
         with w_kg_col:
             w_kg = st.number_input(
-                "Cân nặng (kg):",
-                min_value=30.0,
-                max_value=150.0,
-                value=58.0,
-                step=0.5,
+                "Cân nặng (kg):", min_value=30.0, max_value=150.0, value=58.0, step=0.5
             )
 
         bmi = round(w_kg / ((h_cm / 100) ** 2), 2)
-
         st.caption(f"💡 BMI được tính tự động: **{bmi}**")
 
         mo_ta_nguoi = st.text_input(
@@ -267,62 +236,32 @@ if st.session_state.step == 1:
 
         ghi_chu = st.text_area(
             "Ghi chú thêm:",
-            value=(
-                "Tông màu xanh lam nhã nhặn, bối cảnh quán cà phê phố cổ"
-            ),
+            value="Tông màu xanh lam nhã nhặn, bối cảnh quán cà phê phố cổ",
         )
 
     with right:
         st.markdown("### 2. Trang phục & phong cách")
-
-        trang_phuc_chinh = st.selectbox(
-            "1. Trang phục chính:",
-            TRANG_PHUC_CHINH,
-        )
-
-        do_doi_dau = st.selectbox(
-            "2. Đồ đội đầu:",
-            DO_DOI_DAU,
-        )
-
-        trang_suc = st.selectbox(
-            "3. Trang sức / phụ kiện:",
-            TRANG_SUC,
-        )
-
-        vibe = st.selectbox(
-            "4. Phong cách (Vibe):",
-            VIBE_OPTIONS,
-        )
+        trang_phuc_chinh = st.selectbox("1. Trang phục chính:", TRANG_PHUC_CHINH)
+        do_doi_dau = st.selectbox("2. Đồ đội đầu:", DO_DOI_DAU)
+        trang_suc = st.selectbox("3. Trang sức / phụ kiện:", TRANG_SUC)
+        vibe = st.selectbox("4. Phong cách (Vibe):", VIBE_OPTIONS)
 
     st.divider()
-
     st.markdown("### 📋 Tóm tắt lựa chọn")
 
     c1, c2, c3, c4 = st.columns(4)
-
     with c1:
         st.info(f"**Tên**\n\n{ten_nguoi_dung}")
-
     with c2:
         st.info(f"**Trang phục**\n\n{trang_phuc_chinh}")
-
     with c3:
         st.info(f"**Đội đầu**\n\n{do_doi_dau}")
-
     with c4:
         st.info(f"**Trang sức**\n\n{trang_suc}")
 
-    if st.button(
-        "🚀 Khởi tạo phối đồ (Tạo 2 Option A & B)",
-        type="primary",
-        use_container_width=True,
-    ):
+    if st.button("🚀 Khởi tạo phối đồ (Tạo 2 Option A & B)", type="primary", use_container_width=True):
         if not GEMINI_API_KEY:
-            st.error(
-                "Chưa cấu hình GEMINI_API_KEY trong Streamlit Secrets "
-                "hoặc biến môi trường."
-            )
+            st.error("Chưa cấu hình GEMINI_API_KEY trong Streamlit Secrets.")
             st.stop()
 
         if not ten_nguoi_dung.strip():
@@ -358,13 +297,10 @@ Yêu cầu và ghi chú:
 {ghi_chu}
 
 Ảnh chân dung của người dùng đã được gửi kèm theo nội dung này.
-Hãy phân tích ảnh chân dung và xử lý đúng GIAI_DOAN_1_KHOI_TAO
-theo system instruction.
+Hãy phân tích ảnh chân dung và xử lý đúng GIAI_DOAN_1_KHOI_TAO theo system instruction.
 """
 
-        with st.spinner(
-            "🤖 Gemini đang phân tích ảnh, BMI và kiểm tra quy chuẩn..."
-        ):
+        with st.spinner("🤖 Gemini đang phân tích ảnh, BMI và kiểm tra quy chuẩn..."):
             result = goi_ai_stylist(
                 user_prompt=input_giai_doan_1,
                 image_input=portrait_bytes,
@@ -375,9 +311,7 @@ theo system instruction.
             show_error_from_ai(result)
 
         elif result.get("status") == "SUCCESS":
-            prompt_a, prompt_b = parse_two_prompts(
-                result.get("prompt_image", "")
-            )
+            prompt_a, prompt_b = parse_two_prompts(result.get("prompt_image", ""))
 
             if not prompt_a:
                 st.error("Gemini không trả về Prompt Option A.")
@@ -389,23 +323,20 @@ theo system instruction.
             st.session_state.portrait_mime = portrait_mime
 
             try:
-                with st.spinner("🎨 Đang sinh ảnh Option A bằng Imagen 3..."):
+                with st.spinner("🎨 Đang render ảnh Option A qua Pollinations AI..."):
                     st.session_state.img_a = generate_image(prompt_a, api_key=GEMINI_API_KEY)
 
-                with st.spinner("🎨 Đang sinh ảnh Option B bằng Imagen 3..."):
+                with st.spinner("🎨 Đang render ảnh Option B qua Pollinations AI..."):
                     st.session_state.img_b = generate_image(prompt_b, api_key=GEMINI_API_KEY)
 
                 st.session_state.step = 2
                 st.rerun()
 
             except Exception as e:
-                st.error(f"Lỗi khi gọi Imagen sinh ảnh: {str(e)}")
+                st.error(f"Lỗi sinh ảnh: {str(e)}")
 
         else:
-            st.error(
-                "Gemini trả về kết quả không hợp lệ: "
-                + str(result)
-            )
+            st.error("Gemini trả về kết quả không hợp lệ: " + str(result))
 
 
 # ==============================================================================
@@ -414,41 +345,25 @@ theo system instruction.
 
 elif st.session_state.step == 2:
     st.header("🎨 Chặng 2: Chọn phong cách & tinh chỉnh")
-
-    st.info(
-        "Chọn một trong hai phương án. Sau đó nhập yêu cầu tinh chỉnh "
-        "nếu bạn muốn thay đổi."
-    )
+    st.info("Chọn một trong hai phương án. Sau đó nhập yêu cầu tinh chỉnh nếu bạn muốn thay đổi.")
 
     col_a, col_b = st.columns(2)
 
     with col_a:
         st.subheader("Option A")
-
         if st.session_state.img_a:
-            st.image(
-                st.session_state.img_a,
-                caption="Option A",
-                use_container_width=True,
-            )
+            st.image(st.session_state.img_a, caption="Option A", use_container_width=True)
         else:
             st.warning("Không có ảnh Option A.")
-
         with st.expander("Xem prompt A"):
             st.write(st.session_state.prompt_a)
 
     with col_b:
         st.subheader("Option B")
-
         if st.session_state.img_b:
-            st.image(
-                st.session_state.img_b,
-                caption="Option B",
-                use_container_width=True,
-            )
+            st.image(st.session_state.img_b, caption="Option B", use_container_width=True)
         else:
             st.warning("Không có ảnh Option B.")
-
         with st.expander("Xem prompt B"):
             st.write(st.session_state.prompt_b)
 
@@ -462,10 +377,7 @@ elif st.session_state.step == 2:
 
     feedback_user = st.text_area(
         "✨ Yêu cầu tinh chỉnh:",
-        placeholder=(
-            "Ví dụ: đổi tông màu sang xanh rêu, "
-            "giữ nguyên khuôn mặt, thay bối cảnh thành phố cổ..."
-        ),
+        placeholder="Ví dụ: đổi tông màu sang xanh rêu, giữ nguyên khuôn mặt, thay bối cảnh thành phố cổ...",
     )
 
     c1, c2 = st.columns(2)
@@ -476,11 +388,7 @@ elif st.session_state.step == 2:
             st.rerun()
 
     with c2:
-        if st.button(
-            "✨ Chốt lựa chọn & tạo ảnh cuối",
-            type="primary",
-            use_container_width=True,
-        ):
+        if st.button("✨ Chốt lựa chọn & tạo ảnh cuối", type="primary", use_container_width=True):
             chosen_prompt = (
                 st.session_state.prompt_a
                 if selected == "Option A"
@@ -502,9 +410,7 @@ elif st.session_state.step == 2:
 Hãy xử lý đúng GIAI_DOAN_2_CHOT_HA theo system instruction.
 """
 
-            with st.spinner(
-                "🤖 Gemini đang hoàn thiện prompt cuối và thông tin phối đồ..."
-            ):
+            with st.spinner("🤖 Gemini đang hoàn thiện prompt cuối và thông tin phối đồ..."):
                 result = goi_ai_stylist(
                     user_prompt=input_giai_doan_2,
                     image_input=st.session_state.portrait_bytes,
@@ -532,13 +438,10 @@ Hãy xử lý đúng GIAI_DOAN_2_CHOT_HA theo system instruction.
                     st.rerun()
 
                 except Exception as e:
-                    st.error(f"Lỗi Imagen: {str(e)}")
+                    st.error(f"Lỗi sinh ảnh cuối: {str(e)}")
 
             else:
-                st.error(
-                    "Gemini trả về kết quả không hợp lệ: "
-                    + str(result)
-                )
+                st.error("Gemini trả về kết quả không hợp lệ: " + str(result))
 
 
 # ==============================================================================
@@ -549,19 +452,12 @@ elif st.session_state.step == 3:
     st.header("🏆 Chặng 3: Kết quả hoàn chỉnh")
 
     data = st.session_state.final_result_data or {}
-
     col_img, col_info = st.columns([1, 1])
 
     with col_img:
         st.subheader("🖼️ Bức ảnh hoàn chỉnh")
-
         if st.session_state.final_img:
-            st.image(
-                st.session_state.final_img,
-                caption="Kết quả phối đồ AI Stylist",
-                use_container_width=True,
-            )
-
+            st.image(st.session_state.final_img, caption="Kết quả phối đồ AI Stylist", use_container_width=True)
             st.download_button(
                 "📥 Tải ảnh về máy",
                 data=st.session_state.final_img,
@@ -573,81 +469,31 @@ elif st.session_state.step == 3:
             st.error("Không có ảnh kết quả.")
 
     with col_info:
-        st.success(
-            "💡 **Lời khuyên từ AI Stylist**\n\n"
-            + str(
-                data.get(
-                    "loi_khuyen",
-                    "Không có dữ liệu.",
-                )
-            )
-        )
+        st.success("💡 **Lời khuyên từ AI Stylist**\n\n" + str(data.get("loi_khuyen", "Không có dữ liệu.")))
 
         chi_tiet = data.get("chi_tiet_phoi") or {}
-
         st.subheader("🎨 Chi tiết phối")
-
-        st.markdown(
-            f"**Áo chính:** "
-            f"{chi_tiet.get('ao_chinh', 'Không có dữ liệu')}"
-        )
-
-        st.markdown(
-            f"**Tông màu:** "
-            f"{chi_tiet.get('tone_mau', 'Không có dữ liệu')}"
-        )
-
-        st.markdown(
-            f"**Item hiện đại:** "
-            f"{chi_tiet.get('item_hien_dai', 'Không có dữ liệu')}"
-        )
+        st.markdown(f"**Áo chính:** {chi_tiet.get('ao_chinh', 'Không có dữ liệu')}")
+        st.markdown(f"**Tông màu:** {chi_tiet.get('tone_mau', 'Không có dữ liệu')}")
+        st.markdown(f"**Item hiện đại:** {chi_tiet.get('item_hien_dai', 'Không có dữ liệu')}")
 
         lich_su = data.get("kien_thuc_lich_su") or {}
-
         st.subheader("📚 Kiến thức lịch sử")
-
-        st.markdown(
-            f"**Tên trang phục:** "
-            f"{lich_su.get('ten_trang_phuc', 'Không có dữ liệu')}"
-        )
-
-        st.markdown(
-            f"**Nguồn gốc lịch sử:** "
-            f"{lich_su.get('nguon_goc_lich_su', 'Không có dữ liệu')}"
-        )
+        st.markdown(f"**Tên trang phục:** {lich_su.get('ten_trang_phuc', 'Không có dữ liệu')}")
+        st.markdown(f"**Nguồn gốc lịch sử:** {lich_su.get('nguon_goc_lich_su', 'Không có dữ liệu')}")
 
         y_nghia = lich_su.get("y_nghia_chi_tiet") or {}
-
         with st.expander("Xem ý nghĩa chi tiết", expanded=True):
-            st.markdown(
-                f"**Phom dáng và vật liệu:**\n\n"
-                f"{y_nghia.get('y_nghia_phom_dang_va_vat', 'Không có dữ liệu')}"
-            )
-
-            st.markdown(
-                f"**5 nút Ngũ thường:**\n\n"
-                f"{y_nghia.get('y_nghia_5_nut_ngu_thuong', 'Không có dữ liệu')}"
-            )
-
-            st.markdown(
-                f"**Hoa văn và màu sắc:**\n\n"
-                f"{y_nghia.get('y_nghia_hoa_van_mau_sac', 'Không có dữ liệu')}"
-            )
-
-            st.markdown(
-                f"**Phụ kiện:**\n\n"
-                f"{y_nghia.get('y_nghia_phu_kien', 'Không có dữ liệu')}"
-            )
+            st.markdown(f"**Phom dáng và vật liệu:**\n\n{y_nghia.get('y_nghia_phom_dang_va_vat', 'Không có dữ liệu')}")
+            st.markdown(f"**5 nút Ngũ thường:**\n\n{y_nghia.get('y_nghia_5_nut_ngu_thuong', 'Không có dữ liệu')}")
+            st.markdown(f"**Hoa văn và màu sắc:**\n\n{y_nghia.get('y_nghia_hoa_van_mau_sac', 'Không có dữ liệu')}")
+            st.markdown(f"**Phụ kiện:**\n\n{y_nghia.get('y_nghia_phu_kien', 'Không có dữ liệu')}")
 
     st.divider()
 
     with st.expander("🔍 Xem prompt ảnh cuối"):
         st.write(data.get("prompt_image", ""))
 
-    if st.button(
-        "🔄 Tạo bộ phối mới từ đầu",
-        type="primary",
-        use_container_width=True,
-    ):
+    if st.button("🔄 Tạo bộ phối mới từ đầu", type="primary", use_container_width=True):
         reset_all()
         st.rerun()
