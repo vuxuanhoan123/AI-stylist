@@ -477,7 +477,7 @@ def goi_ai_stylist(
     user_prompt: str,
     image_input=None,
     api_key: str = None,
-    model_name: str = "gemini-2.5-flash",  # ✅ CHUẨN MODEL TỒN TẠI VÀ ỔN ĐỊNH
+    model_name: str = "gemini-3.8-flash",  # ✅ CHUẨN MODEL TỒN TẠI VÀ ỔN ĐỊNH
 ) -> dict:
     """Hàm điều phối gọi AI Stylist dùng model gemini-2.5-flash kèm nén ảnh nén Token."""
     key_to_use = (
