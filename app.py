@@ -44,6 +44,9 @@ GEMINI_API_KEY = get_api_key()
 # TẠO ẢNH BẰNG IMAGEN 3 TỪ GOOGLE AI STUDIO REST API
 # ==============================================================================
 
+import urllib.parse
+import requests
+
 def generate_image(prompt_text, api_key=None):
     """
     Sinh ảnh miễn phí qua Pollinations AI với cơ chế tự chuyển model chống lỗi HTTP 402 (Payment Required).
