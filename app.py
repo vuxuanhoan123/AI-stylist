@@ -47,34 +47,36 @@ GEMINI_API_KEY = get_api_key()
 import urllib.parse
 import requests
 
+import urllib.parse
+import requests
+
 def generate_image(prompt_text, api_key=None):
     """
-    Sinh ảnh miễn phí qua Pollinations AI với cơ chế tự chuyển model chống lỗi HTTP 402 (Payment Required).
+    Sinh ảnh qua Pollinations AI với User-Agent giả lập trình duyệt
+    để vượt qua hệ thống chống bot / lỗi HTTP 402.
     """
-    encoded_prompt = urllib.parse.quote(prompt_text)
-    
-    # Danh sách các mô hình miễn phí 100% của Pollinations AI
-    free_models = ["turbo", "flux-realism", "default"]
-    
-    last_error = ""
-
-    for model_name in free_models:
-        if model_name == "default":
-            url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=768&height=1024&nologo=true"
+    try:
+        # 1. Mã hóa prompt tiếng Anh
+        encoded_prompt = urllib.parse.quote(prompt_text)
+        
+        # 2. URL sinh ảnh Pollinations tiêu chuẩn
+        url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=768&height=1024&nologo=true"
+        
+        # 3. GIẢ LẬP TRÌNH DUYỆT (Khắc phục triệt để lỗi HTTP 402 / Chống Bot)
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+        }
+        
+        response = requests.get(url, headers=headers, timeout=40)
+        
+        if response.status_code == 200:
+            return response.content
         else:
-            url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=768&height=1024&nologo=true&model={model_name}"
-
-        try:
-            response = requests.get(url, timeout=35)
-            # Nếu trả về ảnh thành công 200 OK
-            if response.status_code == 200:
-                return response.content
-            else:
-                last_error = f"Model '{model_name}' báo mã HTTP {response.status_code}"
-        except Exception as e:
-            last_error = f"Lỗi kết nối '{model_name}': {str(e)}"
-
-    raise RuntimeError(f"Không thể tạo ảnh từ Pollinations AI: {last_error}")
+            raise RuntimeError(f"Pollinations AI trả về mã HTTP {response.status_code}")
+            
+    except Exception as e:
+        raise RuntimeError(f"Không thể tạo ảnh từ Pollinations AI: {str(e)}")
 # ==============================================================================
 # DỮ LIỆU UI
 # ==============================================================================
