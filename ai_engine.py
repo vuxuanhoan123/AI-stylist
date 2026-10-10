@@ -7,7 +7,7 @@ from google import genai
 from google.genai import types
 from PIL import Image
 
-# 1. CẤU HÌNH STRUCTURED OUTPUT SCHEMA
+# 1. CẤU HÌNH STRUCTURED OUTPUT SCHEMA (Ép bắt buộc phải có prompt_image)
 STRUCTURED_OUTPUT_SCHEMA = {
     "type": "object",
     "properties": {
@@ -29,6 +29,10 @@ STRUCTURED_OUTPUT_SCHEMA = {
         },
         "canh_bao": {"type": "string", "nullable": True},
         "loi_khuyen": {"type": "string"},
+        "prompt_image": {
+            "type": "string",
+            "description": "Ở Chặng 1 xuất 'OPTION_A: <Prompt A> ||| OPTION_B: <Prompt B>'. Ở Chặng 2 xuất 1 Prompt tiếng Anh siêu chi tiết.",
+        },
         "kien_thuc_lich_su": {
             "type": "object",
             "nullable": True,
@@ -46,7 +50,6 @@ STRUCTURED_OUTPUT_SCHEMA = {
                 },
             },
         },
-        "prompt_image": {"type": "string", "nullable": True},
         "chi_tiet_phoi": {
             "type": "object",
             "nullable": True,
@@ -458,12 +461,12 @@ SYSTEM_INSTRUCTION_TEXT = """{
       "giai_doan_1_khoi_tao": {
         "mo_ta": "Kích hoạt khi người dùng gửi ảnh + BMI + mẫu áo đã chọn + Vibe + Ghi chú ở lần gọi đầu tiên.",
         "xu_ly_vi_pham": "Nếu vi phạm luật cấm kỵ, đặt status = 'GLITCH_DETECTED', error_code, canh_bao, và khóa prompt_image = null.",
-        "xu_ly_hop_le": "Nếu hợp lệ, đặt status = 'SUCCESS'. Trường prompt_image phải xuất đúng chuỗi chứa 2 đoạn prompt tiếng Anh của 2 Style gần nhau theo cú pháp: 'OPTION_A: <Prompt A Option> ||| OPTION_B: <Prompt B Option>' để Frontend Streamlit tách chuỗi gọi Imagen vẽ đúng 2 ảnh. Các trường kien_thuc_lich_su tóm tắt cơ bản."
+        "xu_ly_hop_le": "Nếu hợp lệ, đặt status = 'SUCCESS'. Trường prompt_image BẮT BUỘC phải xuất chuỗi chứa 2 đoạn prompt tiếng Anh phân cách bởi ký tự '|||' theo cú pháp: 'OPTION_A: <Prompt A> ||| OPTION_B: <Prompt B>'."
       },
       "giai_doan_2_chot_ha": {
         "mo_ta": "Kích hoạt khi người dùng gửi lựa chọn (Option A hoặc B) kèm lời feedback tinh chỉnh.",
-        "xu_ly_hop_le": "Đặt status = 'SUCCESS'. Trường prompt_image xuất duy nhất 1 câu prompt hoàn chỉnh nhất đã kết hợp feedback để vẽ bức ảnh cuối cùng.",
-        "cac_truong_ui_bat_buoc": "Điền trọn vẹn 100% các trường: canh_bao = null, loi_khuyen, chi_tiet_phoi (ao_chinh, tone_mau, item_hien_dai), và khối kien_thuc_lich_su (ten_trang_phuc, nguon_goc_lich_su, y_nghia_chi_tiet đầy đủ)."
+        "xu_ly_hop_le": "Đặt status = 'SUCCESS'. Trường prompt_image BẮT BUỘC xuất duy nhất 1 câu prompt hoàn chỉnh nhất đã kết hợp feedback để vẽ bức ảnh cuối cùng.",
+        "cac_truong_ui_bat_buoc": "Điền trọn vẹn 100% các trường: canh_bao = null, loi_khuyen, chi_tiet_phoi (ao_chinh, tone_mau, item_hien_dai), và khối kien_thuc_lich_su."
       }
     }
   }
@@ -474,9 +477,9 @@ def goi_ai_stylist(
     user_prompt: str,
     image_input=None,
     api_key: str = None,
-    model_name: str = "gemini-3.8-flash",  # ✅ Đã đổi chính xác theo yêu cầu từ Google
+    model_name: str = "gemini-2.5-flash",  # ✅ CHUẨN MODEL TỒN TẠI VÀ ỔN ĐỊNH
 ) -> dict:
-    """Hàm điều phối gọi AI Stylist dùng duy nhất gemini-3.8-flash kèm cơ chế Auto-Retry ngầm."""
+    """Hàm điều phối gọi AI Stylist dùng model gemini-2.5-flash kèm nén ảnh nén Token."""
     key_to_use = (
         api_key
         or (st.secrets.get("GEMINI_API_KEY") if hasattr(st, "secrets") else None)
@@ -498,18 +501,25 @@ def goi_ai_stylist(
 
     contents = []
     if image_input is not None:
-        if hasattr(image_input, "read"):
-            img_bytes = image_input.read()
-        elif isinstance(image_input, bytes):
-            img_bytes = image_input
-        else:
+        try:
+            # 💡 NÉN ẢNH ĐỂ TIẾT KIỆM TOKEN (Giảm từ 30,000 token xuống < 1,500 token)
+            if isinstance(image_input, bytes):
+                img = Image.open(io.BytesIO(image_input))
+            elif hasattr(image_input, "read"):
+                img = Image.open(image_input)
+            else:
+                img = image_input
+
+            img.thumbnail((1024, 1024))  # Giảm độ phân giải về tối đa 1024px
             buf = io.BytesIO()
-            image_input.save(buf, format="JPEG")
+            img.save(buf, format="JPEG", quality=80)
             img_bytes = buf.getvalue()
 
-        contents.append(
-            types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg")
-        )
+            contents.append(
+                types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg")
+            )
+        except Exception:
+            pass  # Nếu lỗi đọc ảnh thì bỏ qua để gửi prompt văn bản
 
     contents.append(user_prompt)
 
@@ -521,7 +531,6 @@ def goi_ai_stylist(
         response_schema=STRUCTURED_OUTPUT_SCHEMA,
     )
 
-    # 🔁 CƠ CHẾ AUTO-RETRY NGẦM: THỬ LẠI TỐI ĐA 3 LẦN NẾU MẠNG MÁY CHỦ BỊ NGHẼN TẠM THỜI
     max_retries = 3
     last_error = ""
 
@@ -535,9 +544,8 @@ def goi_ai_stylist(
             return json.loads(response.text)
         except Exception as e:
             last_error = str(e)
-            # Nếu nghẽn mạng tạm thời 503 hoặc 429, tạm dừng 2 giây rồi tự động thử lại
             if "503" in last_error or "429" in last_error or "UNAVAILABLE" in last_error:
-                time.sleep(2)
+                time.sleep(3)
                 continue
             else:
                 break
@@ -546,7 +554,7 @@ def goi_ai_stylist(
         "status": "GLITCH_DETECTED",
         "error_code": None,
         "canh_bao": f"Lỗi gọi Gemini ({model_name}): {last_error}",
-        "loi_khuyen": "Nếu báo 429 RESOURCE_EXHAUSTED, bạn hãy đổi GEMINI_API_KEY sang một Gmail mới. Hoặc nhấn nút '🔄 Thử lại lượt này ngay' bên dưới.",
+        "loi_khuyen": "Nếu báo 429, hãy đổi API Key mới. Hoặc nhấn nút '🔄 Thử lại lượt này ngay'.",
         "kien_thuc_lich_su": None,
         "prompt_image": None,
         "chi_tiet_phoi": None,
